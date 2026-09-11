@@ -2,432 +2,642 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-const INITIAL_FORM = {
-  serviceAreaId: "",
-  eventDate: "",
-  startTime: "16:00",
-  guests: 50,
-  durationHours: 2,
-  matchaBar: false,
-  extraBarista: false,
-  customerName: "",
-  email: "",
-  phone: "",
-  eventType: "",
-  eventAddress: "",
-  notes: "",
-};
+function money(value) {
+  return new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+  }).format(Number(value || 0));
+}
+
+function formatCountdown(seconds) {
+  if (seconds === null) return "15:00";
+  const safe = Math.max(0, seconds);
+  return `${String(Math.floor(safe / 60)).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
+}
+
+function durationHours(start, end) {
+  if (!start || !end) return 0;
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  const startMinutes = sh * 60 + sm;
+  const endMinutes = eh * 60 + em;
+  if (endMinutes <= startMinutes) return 0;
+  return (endMinutes - startMinutes) / 60;
+}
+
+function addOnPriceLabel(addOn) {
+  const price = money(Number(addOn.unit_price_cents || 0) / 100);
+  switch (addOn.pricing_type) {
+    case "PER_GUEST":
+      return `${price} por invitado`;
+    case "PER_EVENT":
+      return `${price} por todo el evento`;
+    case "PER_HOUR":
+      return `${price} por hora adicional`;
+    case "PER_UNIT":
+      return `${price} por unidad`;
+    default:
+      return price;
+  }
+}
+
+function addOnDescription(addOn) {
+  if (addOn.description?.trim()) return addOn.description;
+
+  const descriptions = {
+    COLD_BEVERAGES: "Agrega servicio de bebidas frías para todos los invitados contratados.",
+    FRAPPES: "Agrega frappés al servicio para todos los invitados contratados.",
+    MATCHA_CHAI: "Agrega opciones de matcha y chai al servicio del evento.",
+    DECAF: "Agrega opción de café descafeinado al servicio.",
+    PLANT_MILK: "Agrega opciones de leche vegetal para el servicio.",
+    PASTRY: "Agrega panadería para los invitados del evento.",
+    PREMIUM_PASTRY: "Agrega una selección de panadería premium.",
+    DESSERT_TABLE: "Agrega una mesa de postres como servicio adicional del evento.",
+    BOTTLED_WATER: "Agrega botellas de agua. Indica la cantidad que necesitas.",
+    PERSONALIZED_CUPS: "Agrega vasos personalizados para los invitados contratados.",
+    PERSONALIZED_MENU: "Agrega un menú personalizado para tu evento.",
+    SPECIAL_GLASSWARE: "Agrega cristalería especial al servicio.",
+    ADDITIONAL_CART: "Solicita un Coffee Cart adicional. La disponibilidad será validada por Java.",
+    ADDITIONAL_BARISTA: "Agrega personal adicional al servicio del evento.",
+    ADDITIONAL_HOUR: "Extiende el servicio por una o más horas adicionales.",
+    TRANSPORTATION: "Cargo de transporte cuando corresponda a la zona del evento.",
+  };
+
+  return descriptions[addOn.code] || "Servicio opcional que puedes agregar a tu evento.";
+}
+
+function groupLabel(group) {
+  const labels = {
+    Beverages: "Bebidas",
+    Food: "Alimentos",
+    Customization: "Personalización",
+    Operations: "Operación y servicio",
+  };
+  return labels[group] || group;
+}
+
+function itemHumanLabel(item) {
+  if (item.code === "HOT_COFFEE_SERVICE") {
+    return `Servicio base Java Coffee Cart para ${item.quantity} invitados`;
+  }
+  if (item.code === "COLD_BEVERAGES") {
+    return `Servicio de bebidas frías para ${item.quantity} invitados`;
+  }
+  if (item.code === "ADDITIONAL_HOUR") {
+    return `${item.quantity} hora(s) adicional(es) de servicio`;
+  }
+  return item.name;
+}
+
+function itemCalculation(item) {
+  if (!item) return "";
+  if (item.pricingType === "PER_GUEST") return `${item.quantity} invitados × ${money(item.unitPrice)}`;
+  if (item.pricingType === "PER_HOUR") return `${item.quantity} hora(s) × ${money(item.unitPrice)}`;
+  if (item.pricingType === "PER_UNIT") return `${item.quantity} unidad(es) × ${money(item.unitPrice)}`;
+  if (item.pricingType === "PER_EVENT") return "Precio fijo por evento";
+  return "";
+}
 
 export default function Home() {
-  const [serviceAreas, setServiceAreas] = useState([]);
-  const [form, setForm] = useState(INITIAL_FORM);
-
+  const [config, setConfig] = useState(null);
   const [availability, setAvailability] = useState(null);
   const [quote, setQuote] = useState(null);
   const [hold, setHold] = useState(null);
-
-  const [loadingAreas, setLoadingAreas] = useState(true);
-  const [checkingAvailability, setCheckingAvailability] = useState(false);
-  const [calculatingQuote, setCalculatingQuote] = useState(false);
-  const [creatingHold, setCreatingHold] = useState(false);
-  const [startingCheckout, setStartingCheckout] = useState(false);
-
+  const [remaining, setRemaining] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [remainingSeconds, setRemainingSeconds] = useState(null);
+  const [busy, setBusy] = useState("");
 
-  const selectedArea = useMemo(() => {
-    return (
-      serviceAreas.find((area) => area.id === form.serviceAreaId) || null
-    );
-  }, [serviceAreas, form.serviceAreaId]);
+  const [lead, setLead] = useState({
+    city: "",
+    state: "",
+    customerName: "",
+    email: "",
+    phone: "",
+    estimatedGuests: 100,
+    eventType: "",
+    expectedDate: "",
+    marketingConsent: false,
+  });
+
+  const [form, setForm] = useState({
+    serviceAreaId: "",
+    eventType: "",
+    eventDate: "",
+    startTime: "16:00",
+    endTime: "18:00",
+    guestCount: 100,
+    customerName: "",
+    email: "",
+    phone: "",
+    venueName: "",
+    eventAddress: "",
+    neighborhood: "",
+    postalCode: "",
+    indoorOutdoor: "",
+    floor: "",
+    elevator: "",
+    unloadingAccess: "",
+    setupAccessTime: "",
+    electricityDetails: "",
+    potableWater: "",
+    waterDistanceM: "",
+    invoiceRequired: false,
+    taxName: "",
+    taxRfc: "",
+    taxUsage: "",
+    notes: "",
+    termsAccepted: false,
+    selectedAddOns: [],
+  });
 
   useEffect(() => {
-    loadServiceAreas();
+    loadConfig();
   }, []);
 
   useEffect(() => {
     if (!hold?.holdExpiresAt) {
-      setRemainingSeconds(null);
+      setRemaining(null);
       return;
     }
 
-    function updateCountdown() {
-      const end = new Date(hold.holdExpiresAt).getTime();
-      const now = Date.now();
-      const diff = Math.max(0, Math.floor((end - now) / 1000));
-      setRemainingSeconds(diff);
-    }
+    const tick = () => {
+      const seconds = Math.max(
+        0,
+        Math.floor((new Date(hold.holdExpiresAt).getTime() - Date.now()) / 1000)
+      );
+      setRemaining(seconds);
+    };
 
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-
+    tick();
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [hold?.holdExpiresAt]);
 
-  async function apiGet(url) {
-    const response = await fetch(url, {
-      cache: "no-store",
-    });
+  const groupedAddOns = useMemo(() => {
+    const groups = {};
+    for (const item of config?.addOns || []) {
+      groups[item.group_name] ||= [];
+      groups[item.group_name].push(item);
+    }
+    return groups;
+  }, [config]);
 
-    let data = {};
+  const selectedArea = useMemo(
+    () => config?.serviceAreas?.find((area) => area.id === form.serviceAreaId) || null,
+    [config, form.serviceAreaId]
+  );
 
+  const depositPercent = Number(config?.settings?.deposit_bps || 0) / 100;
+  const vatPercent = Number(config?.settings?.vat_bps || 0) / 100;
+  const holdMinutes = Number(config?.settings?.hold_minutes || 15);
+
+  async function loadConfig() {
     try {
-      data = await response.json();
-    } catch {
-      data = {};
-    }
-
-    if (!response.ok || data.success === false) {
-      throw new Error(
-        data.error || "No fue posible completar la solicitud."
-      );
-    }
-
-    return data;
-  }
-
-  async function apiPost(url, body) {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-
-    let data = {};
-
-    try {
-      data = await response.json();
-    } catch {
-      data = {};
-    }
-
-    if (!response.ok || data.success === false) {
-      throw new Error(
-        data.error || "No fue posible completar la solicitud."
-      );
-    }
-
-    return data;
-  }
-
-  async function loadServiceAreas() {
-    try {
-      setLoadingAreas(true);
       setError("");
+      const response = await fetch("/api/event-config", { cache: "no-store" });
+      const data = await response.json();
 
-      const data = await apiGet("/api/service-areas");
-
-      const areas = data.serviceAreas || [];
-
-      setServiceAreas(areas);
-
-      if (areas.length > 0) {
-        setForm((prev) => ({
-          ...prev,
-          serviceAreaId: prev.serviceAreaId || areas[0].id,
-        }));
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "No fue posible cargar Java Events.");
       }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoadingAreas(false);
+
+      setConfig(data);
+
+      const firstArea = data.serviceAreas?.[0];
+      const firstTier = data.guestTiers?.[0];
+
+      setForm((current) => ({
+        ...current,
+        serviceAreaId: current.serviceAreaId || firstArea?.id || "",
+        guestCount: current.guestCount || firstTier?.guest_count || 100,
+      }));
+    } catch (e) {
+      setError(e.message);
     }
   }
 
-  function updateField(key, value) {
-    setForm((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
-  }
+  function update(key, value) {
+    setForm((current) => ({ ...current, [key]: value }));
 
-  function resetDownstream(from = "availability") {
-    if (from === "availability") {
+    if (["serviceAreaId", "eventDate", "guestCount", "selectedAddOns"].includes(key)) {
+      setQuote(null);
+    }
+
+    if (["serviceAreaId", "eventDate"].includes(key)) {
       setAvailability(null);
-      setQuote(null);
-      setHold(null);
-      setSuccess("");
     }
 
-    if (from === "quote") {
-      setQuote(null);
-      setHold(null);
-      setSuccess("");
-    }
-
-    if (from === "hold") {
-      setHold(null);
-      setSuccess("");
-    }
+    setSuccess("");
   }
 
-  function validateStep1() {
-    if (!form.serviceAreaId) {
-      throw new Error("Selecciona una ciudad.");
-    }
+  function toggleAddOn(addOn) {
+    const exists = form.selectedAddOns.find((item) => item.code === addOn.code);
 
-    if (!form.eventDate) {
-      throw new Error("Selecciona la fecha del evento.");
-    }
-
-    if (!form.startTime) {
-      throw new Error("Selecciona la hora de inicio.");
-    }
-
-    if (!Number(form.guests) || Number(form.guests) < 1) {
-      throw new Error("Ingresa un número válido de invitados.");
-    }
-
-    if (!Number(form.durationHours) || Number(form.durationHours) < 1) {
-      throw new Error("Selecciona una duración válida.");
-    }
-  }
-
-  function validateCustomerStep() {
-    if (!form.customerName.trim()) {
-      throw new Error("Ingresa el nombre del cliente.");
-    }
-
-    if (!form.email.trim()) {
-      throw new Error("Ingresa el correo electrónico.");
-    }
-
-    if (!/\S+@\S+\.\S+/.test(form.email.trim())) {
-      throw new Error("Ingresa un correo electrónico válido.");
-    }
-
-    if (!isValidMxPhone(form.phone)) {
-      throw new Error(
-        "Ingresa un teléfono válido. Usa 10 dígitos de México."
+    if (exists) {
+      update(
+        "selectedAddOns",
+        form.selectedAddOns.filter((item) => item.code !== addOn.code)
       );
+      return;
     }
+
+    update("selectedAddOns", [
+      ...form.selectedAddOns,
+      { code: addOn.code, quantity: 1 },
+    ]);
   }
 
-  async function handleCheckAvailability() {
+  function setAddOnQuantity(code, quantity) {
+    update(
+      "selectedAddOns",
+      form.selectedAddOns.map((item) =>
+        item.code === code
+          ? { ...item, quantity: Math.max(1, Number(quantity || 1)) }
+          : item
+      )
+    );
+  }
+
+  async function checkAvailability() {
     try {
-      setCheckingAvailability(true);
+      setBusy("availability");
       setError("");
       setSuccess("");
-      validateStep1();
-      resetDownstream("availability");
 
-      const data = await apiPost("/api/availability", {
-        serviceAreaId: form.serviceAreaId,
-        eventDate: form.eventDate,
-        startTime: form.startTime,
-        durationHours: Number(form.durationHours),
+      if (!form.serviceAreaId) throw new Error("Selecciona una ciudad.");
+      if (!form.eventDate) throw new Error("Selecciona una fecha.");
+
+      const response = await fetch("/api/availability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          serviceAreaId: form.serviceAreaId,
+          eventDate: form.eventDate,
+        }),
       });
 
-      if (!data.available) {
-        throw new Error(
-          data.message ||
-            "No hay disponibilidad para la fecha y horario seleccionados."
-        );
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "No fue posible verificar la disponibilidad.");
       }
 
       setAvailability(data);
-      setSuccess("Disponibilidad confirmada. Ya puedes cotizar tu evento.");
-    } catch (err) {
-      setError(err.message);
+
+      if (!data.available) {
+        throw new Error(data.message || "La fecha no está disponible.");
+      }
+
+      setSuccess("La fecha está disponible. Ahora puedes calcular el precio de tu evento.");
+    } catch (e) {
+      setError(e.message);
     } finally {
-      setCheckingAvailability(false);
+      setBusy("");
     }
   }
 
-  async function handleCalculateQuote() {
+  async function calculateQuote() {
     try {
-      setCalculatingQuote(true);
+      setBusy("quote");
       setError("");
       setSuccess("");
-
-      validateStep1();
 
       if (!availability?.available) {
-        throw new Error("Primero verifica la disponibilidad.");
+        throw new Error("Primero verifica que la fecha esté disponible.");
       }
 
-      resetDownstream("quote");
-
-      const data = await apiPost("/api/quote", {
-        serviceAreaId: form.serviceAreaId,
-        guests: Number(form.guests),
-        hours: Number(form.durationHours),
-        matchaBar: form.matchaBar,
-        extraBarista: form.extraBarista,
+      const response = await fetch("/api/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          serviceAreaId: form.serviceAreaId,
+          guestCount: Number(form.guestCount),
+          selectedAddOns: form.selectedAddOns,
+        }),
       });
 
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "No fue posible calcular el precio.");
+      }
+
       setQuote(data);
-      setSuccess("Cotización generada. Ahora captura los datos del cliente.");
-    } catch (err) {
-      setError(err.message);
+      setSuccess("Precio calculado. Revisa el desglose antes de continuar.");
+    } catch (e) {
+      setError(e.message);
     } finally {
-      setCalculatingQuote(false);
+      setBusy("");
     }
   }
 
-  async function handleCreateHold() {
+  function validateBeforeHold() {
+    if (!quote?.quote) throw new Error("Primero calcula el precio de tu evento.");
+    if (!form.customerName?.trim()) throw new Error("Falta el nombre completo del cliente.");
+    if (!form.email?.trim()) throw new Error("Falta el correo electrónico.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      throw new Error("El correo electrónico no parece válido.");
+    }
+    if (!form.phone?.trim()) throw new Error("Falta el teléfono.");
+    if (!form.venueName?.trim()) throw new Error("Falta el nombre del lugar donde será el evento.");
+    if (!form.eventAddress?.trim()) throw new Error("Falta la calle y número del lugar.");
+    if (!form.neighborhood?.trim()) throw new Error("Falta la colonia.");
+    if (!form.postalCode?.trim()) throw new Error("Falta el código postal.");
+    if (!form.indoorOutdoor) throw new Error("Indica si el evento será en interior o exterior.");
+    if (!form.floor?.trim()) throw new Error("Indica en qué nivel o piso se realizará el evento.");
+    if (!form.elevator) throw new Error("Indica si hay elevador disponible.");
+    if (!form.unloadingAccess?.trim()) {
+      throw new Error("Describe cómo podremos descargar y meter el equipo al lugar.");
+    }
+    if (!form.setupAccessTime) {
+      throw new Error("Indica a qué hora podremos entrar a montar el Coffee Cart.");
+    }
+    if (!form.electricityDetails?.trim()) {
+      throw new Error("Describe la disponibilidad de electricidad.");
+    }
+    if (!form.potableWater) throw new Error("Indica si hay agua potable disponible.");
+    if (
+      form.waterDistanceM === "" ||
+      form.waterDistanceM === null ||
+      form.waterDistanceM === undefined
+    ) {
+      throw new Error("Indica la distancia aproximada entre el Coffee Cart y el punto de agua.");
+    }
+    if (form.invoiceRequired && !form.taxName?.trim()) {
+      throw new Error("Falta la razón social para la factura.");
+    }
+    if (form.invoiceRequired && !form.taxRfc?.trim()) {
+      throw new Error("Falta el RFC para la factura.");
+    }
+    if (!form.termsAccepted) {
+      throw new Error(
+        "Debes confirmar que entiendes qué estás contratando y aceptar las condiciones."
+      );
+    }
+
+    const hours = durationHours(form.startTime, form.endTime);
+
+    if (hours <= 0) {
+      throw new Error("La hora de término debe ser posterior a la hora de inicio.");
+    }
+  }
+
+  async function createHold() {
     try {
-      setCreatingHold(true);
+      setBusy("hold");
       setError("");
       setSuccess("");
 
-      validateStep1();
-      validateCustomerStep();
+      validateBeforeHold();
 
-      if (!quote?.quote) {
-        throw new Error("Primero genera la cotización.");
-      }
+      const hours = durationHours(form.startTime, form.endTime);
+      const setupAccessIso = form.setupAccessTime
+        ? new Date(form.setupAccessTime).toISOString()
+        : "";
 
-      const data = await apiPost("/api/hold", {
-        serviceAreaId: form.serviceAreaId,
-        eventDate: form.eventDate,
-        startTime: form.startTime,
-        durationHours: Number(form.durationHours),
-        guests: Number(form.guests),
-        matchaBar: form.matchaBar,
-        extraBarista: form.extraBarista,
-        customerName: form.customerName.trim(),
-        email: form.email.trim().toLowerCase(),
-        phone: onlyDigits(form.phone),
-        eventType: form.eventType.trim(),
-        eventAddress: form.eventAddress.trim(),
-        notes: form.notes.trim(),
-        packageName: "Java Coffee Cart",
-        total: quote.quote.total,
-        deposit: quote.quote.deposit,
-        balance: quote.quote.balance,
+      const response = await fetch("/api/hold", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...form,
+          durationHours: hours,
+          setupAccessTime: setupAccessIso,
+          elevator:
+            form.elevator === "yes"
+              ? true
+              : form.elevator === "no"
+              ? false
+              : null,
+          potableWater:
+            form.potableWater === "yes"
+              ? true
+              : form.potableWater === "no"
+              ? false
+              : null,
+          latitude: null,
+          longitude: null,
+          waterDistanceM:
+            form.waterDistanceM === "" ? null : Number(form.waterDistanceM),
+        }),
       });
 
-      const bookingId = data.bookingId || data.booking?.id || null;
-      const holdExpiresAt =
-        data.holdExpiresAt ||
-        data.booking?.hold_expires_at ||
-        data.booking?.holdExpiresAt ||
-        null;
+      const data = await response.json();
 
-      if (!bookingId) {
-        throw new Error("No se recibió el booking ID de la reserva.");
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "No fue posible apartar la fecha.");
       }
 
       setHold({
-        bookingId,
-        holdExpiresAt,
-        data,
+        bookingId: data.bookingId,
+        eventOrderNumber: data.eventOrderNumber,
+        holdExpiresAt: data.holdExpiresAt,
       });
 
-      setSuccess("Fecha apartada correctamente. Ya puedes continuar al pago.");
-    } catch (err) {
-      setError(err.message);
+      setQuote((current) => ({
+        ...current,
+        quote: {
+          ...current.quote,
+          total: data.quote.total,
+          deposit: data.quote.deposit,
+          balance: data.quote.balance,
+        },
+      }));
+
+      setSuccess(`Fecha apartada. Tu número de evento es ${data.eventOrderNumber}.`);
+    } catch (e) {
+      setError(e.message);
     } finally {
-      setCreatingHold(false);
+      setBusy("");
     }
   }
 
-  async function handleCheckout() {
+  async function checkout() {
+    let paymentWindow = null;
+
     try {
-      setStartingCheckout(true);
+      setBusy("checkout");
+      setError("");
+
+      if (!hold?.bookingId) throw new Error("Primero aparta la fecha.");
+      if (remaining !== null && remaining <= 0) {
+        throw new Error("El apartado venció. Verifica de nuevo la disponibilidad.");
+      }
+
+      paymentWindow = window.open("about:blank", "java_event_checkout");
+
+      const response = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId: hold.bookingId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        if (paymentWindow && !paymentWindow.closed) paymentWindow.close();
+        throw new Error(data.error || "No fue posible iniciar el pago.");
+      }
+
+      const confirmationUrl =
+        data.confirmationUrl || `/confirmation/${hold.bookingId}`;
+
+      if (data.alreadyPaid) {
+        if (paymentWindow && !paymentWindow.closed) paymentWindow.close();
+        window.location.assign(confirmationUrl);
+        return;
+      }
+
+      if (!data.checkoutUrl) {
+        if (paymentWindow && !paymentWindow.closed) paymentWindow.close();
+        throw new Error("Shopify no devolvió una URL de pago.");
+      }
+
+      if (paymentWindow && !paymentWindow.closed) {
+        paymentWindow.location.replace(data.checkoutUrl);
+        window.location.assign(confirmationUrl);
+      } else {
+        window.location.assign(data.checkoutUrl);
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function submitLead() {
+    try {
+      setBusy("lead");
       setError("");
       setSuccess("");
 
-      if (!hold?.bookingId) {
-        throw new Error("Primero aparta la fecha.");
-      }
-
-      if (remainingSeconds !== null && remainingSeconds <= 0) {
-        throw new Error(
-          "El tiempo para completar el pago expiró. Genera una nueva reserva."
-        );
-      }
-
-      const data = await apiPost("/api/checkout", {
-        bookingId: hold.bookingId,
+      const response = await fetch("/api/unsupported-city-lead", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(lead),
       });
 
-      const checkoutUrl =
-        data.checkoutUrl ||
-        data.invoiceUrl ||
-        data.url ||
-        data.checkout?.url ||
-        null;
+      const data = await response.json();
 
-      if (!checkoutUrl) {
-        throw new Error("No se recibió la URL de checkout.");
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "No fue posible guardar la solicitud.");
       }
 
-      window.location.href = checkoutUrl;
-    } catch (err) {
-      setError(err.message);
+      setSuccess(data.message);
+    } catch (e) {
+      setError(e.message);
     } finally {
-      setStartingCheckout(false);
+      setBusy("");
     }
   }
 
-  const activeStep = getActiveStep({
-    availability,
-    quote,
-    hold,
-  });
+  async function uploadFile(file, uploadType) {
+    if (!file || !hold?.bookingId) return;
+
+    setBusy(`upload-${uploadType}`);
+    setError("");
+
+    try {
+      const body = new FormData();
+      body.append("bookingId", hold.bookingId);
+      body.append("uploadType", uploadType);
+      body.append("file", file);
+
+      const response = await fetch("/api/event-upload", {
+        method: "POST",
+        body,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "No fue posible subir el archivo.");
+      }
+
+      setSuccess("Archivo guardado correctamente.");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  if (!config) {
+    return (
+      <main className="app-shell">
+        <div className="container" style={{ paddingTop: 80 }}>
+          <div className="panel form-section">
+            {error || "Cargando Java Events..."}
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="app-shell">
       <section className="hero">
         <div className="hero-bg" />
+
         <div className="container hero-inner">
           <div className="eyebrow">
             <span className="eyebrow-dot" />
-            Java Times Caffé · Eventos
+            Java Times Caffé · Events
           </div>
 
           <div className="hero-grid">
-            <div className="hero-copy">
+            <div>
               <h1 className="hero-title">
-                Java Coffee Cart <span>para eventos memorables</span>
+                Lleva Java Times Caffé <span>a tu evento</span>
               </h1>
 
               <p className="hero-subtitle">
-                Cotiza, aparta y paga tu evento en un flujo mucho más claro.
-                Inspirado en la esencia de Java: producto real, calidez,
-                experiencia y una presentación premium.
+                Reserva un Java Coffee Cart completo para tu evento. Tú eliges
+                fecha, invitados y servicios. Nosotros te mostramos el precio
+                total antes de que pagues.
               </p>
 
               <div className="hero-pills">
-                <div className="hero-pill">Origen</div>
-                <div className="hero-pill">Tueste</div>
-                <div className="hero-pill">Experiencia</div>
-                <div className="hero-pill">Entrega profesional</div>
+                <div className="hero-pill">Cotización clara</div>
+                <div className="hero-pill">Fecha reservada</div>
+                <div className="hero-pill">Pago seguro</div>
+                <div className="hero-pill">Servicio Java</div>
               </div>
             </div>
 
             <div className="hero-card">
-              <div className="hero-card-label">Flujo de reserva</div>
-              <h2 className="hero-card-title">De la cotización al checkout</h2>
+              <div className="hero-card-label">Lo que estás contratando</div>
+
+              <h2 className="hero-card-title">
+                Un servicio completo de Coffee Cart para un evento
+              </h2>
+
               <p>
-                Primero validas disponibilidad, después generas la cotización,
-                apartas la fecha temporalmente y terminas el pago en Shopify.
+                No estás comprando cafés individuales. Estás contratando el
+                Coffee Cart, equipo, montaje, personal y servicio de bebidas
+                para el número de invitados seleccionado.
               </p>
 
               <div className="hero-micro-grid">
                 <div className="micro-box">
-                  <div className="micro-kicker">Paso 1</div>
-                  <div className="micro-value">Evento</div>
+                  <div className="micro-kicker">Hoy</div>
+                  <div className="micro-value">Pagas anticipo</div>
                 </div>
 
                 <div className="micro-box">
-                  <div className="micro-kicker">Paso 2</div>
-                  <div className="micro-value">Cotización</div>
+                  <div className="micro-kicker">Después</div>
+                  <div className="micro-value">Liquidas saldo</div>
                 </div>
 
                 <div className="micro-box">
-                  <div className="micro-kicker">Paso 3</div>
-                  <div className="micro-value">Apartado</div>
+                  <div className="micro-kicker">Precio</div>
+                  <div className="micro-value">IVA desglosado</div>
                 </div>
 
                 <div className="micro-box">
-                  <div className="micro-kicker">Paso 4</div>
-                  <div className="micro-value">Checkout</div>
+                  <div className="micro-kicker">Reserva</div>
+                  <div className="micro-value">Un evento</div>
                 </div>
               </div>
             </div>
@@ -438,45 +648,57 @@ export default function Home() {
       <div className="container page-grid">
         <section className="panel">
           <div className="panel-header">
-            <h2 className="panel-title">Cotiza tu evento</h2>
+            <h2 className="panel-title">Cotiza tu Java Coffee Cart</h2>
             <p className="panel-subtitle">
-              Elige ciudad, fecha y horario. Después validamos disponibilidad,
-              generamos la cotización y apartamos tu fecha antes de enviarte al
-              pago.
+              Sigue los pasos. No se te cobrará nada hasta que veas y aceptes
+              el precio de tu evento.
             </p>
           </div>
 
-          <div className="stepbar">
-            <div className={`stepbar-item ${activeStep >= 1 ? "active" : ""} ${availability?.available ? "done" : ""}`}>
-              <div className="stepbar-number">1</div>
-              <div className="stepbar-label">Evento</div>
-              <div className="stepbar-desc">Ciudad, fecha, hora y tamaño del evento.</div>
-            </div>
-
-            <div className={`stepbar-item ${activeStep >= 2 ? "active" : ""} ${quote?.quote ? "done" : ""}`}>
-              <div className="stepbar-number">2</div>
-              <div className="stepbar-label">Cotización</div>
-              <div className="stepbar-desc">Calculamos total, anticipo y saldo.</div>
-            </div>
-
-            <div className={`stepbar-item ${activeStep >= 3 ? "active" : ""} ${hold?.bookingId ? "done" : ""}`}>
-              <div className="stepbar-number">3</div>
-              <div className="stepbar-label">Apartado</div>
-              <div className="stepbar-desc">Reservamos temporalmente tu fecha.</div>
-            </div>
-
-            <div className={`stepbar-item ${activeStep >= 4 ? "active" : ""}`}>
-              <div className="stepbar-number">4</div>
-              <div className="stepbar-label">Pago</div>
-              <div className="stepbar-desc">Continúas a Shopify Checkout.</div>
-            </div>
-          </div>
-
           <div className="form-section">
+            <div className="quote-card" style={{ marginBottom: 28 }}>
+              <div className="section-kicker">Antes de empezar</div>
+              <h3 style={{ marginTop: 8, marginBottom: 12 }}>
+                Así funciona tu reserva
+              </h3>
+
+              <div style={{ display: "grid", gap: 12 }}>
+                <ExplainerStep
+                  number="1"
+                  title="Elige tu evento"
+                  text="Selecciona ciudad, fecha, horario y número de invitados."
+                />
+                <ExplainerStep
+                  number="2"
+                  title="Revisa qué incluye"
+                  text="El servicio base incluye Coffee Cart, equipo, montaje, personal asignado, espresso, americano, cappuccino, latte, mocha y té caliente."
+                />
+                <ExplainerStep
+                  number="3"
+                  title="Agrega extras si los necesitas"
+                  text="Puedes sumar bebidas frías, alimentos, personalización u horas adicionales. Cada extra muestra claramente cómo se cobra."
+                />
+                <ExplainerStep
+                  number="4"
+                  title="Ve el precio completo"
+                  text={`Antes de reservar verás subtotal, IVA ${vatPercent.toFixed(
+                    0
+                  )}%, total del evento, anticipo y saldo pendiente.`}
+                />
+                <ExplainerStep
+                  number="5"
+                  title="Aparta tu fecha"
+                  text={`Al continuar se reserva temporalmente el Coffee Cart durante ${holdMinutes} minutos. Hoy pagarás el anticipo de ${depositPercent.toFixed(
+                    0
+                  )}% configurado para el evento; el saldo restante no se cobra hoy.`}
+                />
+              </div>
+            </div>
+
             <div className="section-title">
               <div>
-                <div className="section-kicker">Paso 1</div>
-                <h3>Detalles del evento</h3>
+                <div className="section-kicker">1 · Tu evento</div>
+                <h3>¿Dónde y cuándo será?</h3>
               </div>
             </div>
 
@@ -486,323 +708,686 @@ export default function Home() {
                 <select
                   className="select"
                   value={form.serviceAreaId}
-                  onChange={(e) => {
-                    updateField("serviceAreaId", e.target.value);
-                    resetDownstream("availability");
-                  }}
-                  disabled={loadingAreas}
+                  onChange={(e) => update("serviceAreaId", e.target.value)}
                 >
-                  <option value="">
-                    {loadingAreas
-                      ? "Cargando ciudades..."
-                      : "Selecciona una ciudad"}
-                  </option>
-
-                  {serviceAreas.map((area) => (
+                  {config.serviceAreas.map((area) => (
                     <option key={area.id} value={area.id}>
                       {area.city}, {area.state}
                     </option>
                   ))}
+                  <option value="OTHER">Otra ciudad</option>
                 </select>
-              </div>
 
-              <div className="field">
-                <label className="label">Fecha del evento</label>
-                <input
-                  className="input"
-                  type="date"
-                  value={form.eventDate}
-                  onChange={(e) => {
-                    updateField("eventDate", e.target.value);
-                    resetDownstream("availability");
-                  }}
-                />
-              </div>
-
-              <div className="field">
-                <label className="label">Hora de inicio</label>
-                <input
-                  className="input"
-                  type="time"
-                  value={form.startTime}
-                  onChange={(e) => {
-                    updateField("startTime", e.target.value);
-                    resetDownstream("availability");
-                  }}
-                />
-              </div>
-
-              <div className="field">
-                <label className="label">Número de invitados</label>
-                <input
-                  className="input"
-                  type="number"
-                  min="1"
-                  value={form.guests}
-                  onChange={(e) => {
-                    updateField("guests", Number(e.target.value));
-                    resetDownstream("quote");
-                  }}
-                />
-              </div>
-
-              <div className="field">
-                <label className="label">Duración del evento</label>
-                <select
-                  className="select"
-                  value={form.durationHours}
-                  onChange={(e) => {
-                    updateField("durationHours", Number(e.target.value));
-                    resetDownstream("availability");
-                  }}
-                >
-                  <option value={2}>2 horas</option>
-                  <option value={3}>3 horas</option>
-                  <option value={4}>4 horas</option>
-                  <option value={5}>5 horas</option>
-                  <option value={6}>6 horas</option>
-                </select>
+                <small className="caption">
+                  Sólo puedes pagar eventos dentro de una ciudad con cobertura activa.
+                </small>
               </div>
             </div>
 
-            <div className="check-grid">
-              <label className="check-card">
-                <input
-                  type="checkbox"
-                  checked={form.matchaBar}
-                  onChange={(e) => {
-                    updateField("matchaBar", e.target.checked);
-                    resetDownstream("quote");
-                  }}
-                />
-                <div>
-                  <div className="check-title">Matcha Bar</div>
-                  <div className="check-text">
-                    Agrega una estación complementaria de matcha para elevar la experiencia.
-                  </div>
-                </div>
-              </label>
-
-              <label className="check-card">
-                <input
-                  type="checkbox"
-                  checked={form.extraBarista}
-                  onChange={(e) => {
-                    updateField("extraBarista", e.target.checked);
-                    resetDownstream("quote");
-                  }}
-                />
-                <div>
-                  <div className="check-title">Barista adicional</div>
-                  <div className="check-text">
-                    Ideal para eventos con mayor flujo y mejor velocidad de atención.
-                  </div>
-                </div>
-              </label>
-            </div>
-
-            <div className="action-row">
-              <button
-                className="button button-secondary"
-                onClick={handleCheckAvailability}
-                disabled={checkingAvailability || loadingAreas}
-              >
-                {checkingAvailability
-                  ? "Verificando..."
-                  : "Verificar disponibilidad"}
-              </button>
-
-              <button
-                className="button button-primary"
-                onClick={handleCalculateQuote}
-                disabled={calculatingQuote || !availability?.available}
-              >
-                {calculatingQuote ? "Cotizando..." : "Generar cotización"}
-              </button>
-            </div>
-
-            {availability?.available && (
-              <div className="status success">
-                <strong>Java Coffee Cart disponible.</strong>
-                <br />
-                {formatDateLong(form.eventDate)} · {formatTime12(form.startTime)} ·{" "}
-                {form.durationHours} horas
-              </div>
-            )}
-          </div>
-
-          <div className="divider" />
-
-          <div className="form-section">
-            <div className="section-title">
-              <div>
-                <div className="section-kicker">Paso 2</div>
-                <h3>Datos del cliente</h3>
-              </div>
-            </div>
-
-            <div className="form-grid">
-              <div className="field full">
-                <label className="label">Nombre completo</label>
-                <input
-                  className="input"
-                  type="text"
-                  value={form.customerName}
-                  onChange={(e) => updateField("customerName", e.target.value)}
-                  placeholder="Nombre del cliente o empresa"
-                />
-              </div>
-
-              <div className="field">
-                <label className="label">Correo electrónico</label>
-                <input
-                  className="input"
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => updateField("email", e.target.value)}
-                  placeholder="correo@ejemplo.com"
-                />
-              </div>
-
-              <div className="field">
-                <label className="label">Teléfono</label>
-                <input
-                  className="input"
-                  type="tel"
-                  value={form.phone}
-                  onChange={(e) => updateField("phone", e.target.value)}
-                  placeholder="8711234567"
-                />
-              </div>
-
-              <div className="field">
-                <label className="label">Tipo de evento</label>
-                <input
-                  className="input"
-                  type="text"
-                  value={form.eventType}
-                  onChange={(e) => updateField("eventType", e.target.value)}
-                  placeholder="Corporativo, boda, inauguración, etc."
-                />
-              </div>
-
-              <div className="field">
-                <label className="label">Dirección del evento</label>
-                <input
-                  className="input"
-                  type="text"
-                  value={form.eventAddress}
-                  onChange={(e) => updateField("eventAddress", e.target.value)}
-                  placeholder="Dirección completa del evento"
-                />
-              </div>
-
-              <div className="field full">
-                <label className="label">Notas adicionales</label>
-                <textarea
-                  className="textarea"
-                  value={form.notes}
-                  onChange={(e) => updateField("notes", e.target.value)}
-                  placeholder="Indicaciones especiales, acceso, montaje, observaciones..."
-                />
-              </div>
-            </div>
-
-            {quote?.quote && (
+            {form.serviceAreaId === "OTHER" ? (
               <div className="quote-card">
-                <div className="quote-top">
-                  <div>
-                    <div className="quote-money-label">Tu evento Java</div>
-                    <div className="quote-place">
-                      {selectedArea?.city || quote?.serviceArea?.city || "Evento"}
-                    </div>
-                    <div className="quote-meta">
-                      {formatDateLong(form.eventDate)} · {formatTime12(form.startTime)}
-                      <br />
-                      {form.guests} invitados · {form.durationHours} horas
-                    </div>
+                <h3>Quiero Java Coffee Cart en otra ciudad</h3>
+                <p className="caption">
+                  Todavía no podemos cobrarte un evento fuera de las zonas
+                  activas, pero podemos guardar tu solicitud para expansión.
+                </p>
+
+                <div className="form-grid">
+                  <TextField
+                    label="Ciudad"
+                    value={lead.city}
+                    onChange={(value) => setLead({ ...lead, city: value })}
+                  />
+                  <TextField
+                    label="Estado"
+                    value={lead.state}
+                    onChange={(value) => setLead({ ...lead, state: value })}
+                  />
+                  <TextField
+                    label="Tu nombre"
+                    value={lead.customerName}
+                    onChange={(value) =>
+                      setLead({ ...lead, customerName: value })
+                    }
+                  />
+                  <TextField
+                    label="Correo"
+                    value={lead.email}
+                    onChange={(value) => setLead({ ...lead, email: value })}
+                  />
+                  <TextField
+                    label="Teléfono"
+                    value={lead.phone}
+                    onChange={(value) => setLead({ ...lead, phone: value })}
+                  />
+                  <TextField
+                    label="Tipo de evento"
+                    value={lead.eventType}
+                    onChange={(value) =>
+                      setLead({ ...lead, eventType: value })
+                    }
+                  />
+
+                  <div className="field">
+                    <label className="label">Fecha estimada</label>
+                    <input
+                      className="input"
+                      type="date"
+                      value={lead.expectedDate}
+                      onChange={(e) =>
+                        setLead({ ...lead, expectedDate: e.target.value })
+                      }
+                    />
                   </div>
 
-                  <div>
-                    <div className="quote-money-label">Total estimado</div>
-                    <div className="quote-money">
-                      {formatMoney(quote.quote.total)}
-                    </div>
+                  <div className="field">
+                    <label className="label">Invitados estimados</label>
+                    <input
+                      className="input"
+                      type="number"
+                      min="1"
+                      value={lead.estimatedGuests}
+                      onChange={(e) =>
+                        setLead({
+                          ...lead,
+                          estimatedGuests: Number(e.target.value),
+                        })
+                      }
+                    />
                   </div>
                 </div>
 
-                <div className="quote-breakdown">
-                  <div className="mini-stat">
-                    <div className="mini-stat-label">Anticipo para reservar</div>
-                    <div className="mini-stat-value">
-                      {formatMoney(quote.quote.deposit)}
+                <label className="check-card" style={{ marginTop: 15 }}>
+                  <input
+                    type="checkbox"
+                    checked={lead.marketingConsent}
+                    onChange={(e) =>
+                      setLead({ ...lead, marketingConsent: e.target.checked })
+                    }
+                  />
+                  <div>
+                    <div className="check-title">
+                      Quiero recibir noticias cuando Java llegue a mi ciudad
                     </div>
                   </div>
+                </label>
 
-                  <div className="mini-stat">
-                    <div className="mini-stat-label">Saldo restante</div>
-                    <div className="mini-stat-value">
-                      {formatMoney(quote.quote.balance)}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="note">
-                  Esta cotización utiliza actualmente precios de prueba mientras
-                  configuramos el tarifario definitivo de Java Coffee Cart.
+                <div className="action-row">
+                  <button className="button button-primary" onClick={submitLead}>
+                    {busy === "lead" ? "Guardando..." : "Enviar solicitud"}
+                  </button>
                 </div>
               </div>
-            )}
+            ) : (
+              <>
+                <div className="form-grid">
+                  <div className="field">
+                    <label className="label">Fecha del evento</label>
+                    <input
+                      className="input"
+                      type="date"
+                      value={form.eventDate}
+                      onChange={(e) => update("eventDate", e.target.value)}
+                    />
+                  </div>
 
-            <div className="action-row">
-              <button
-                className="button button-primary"
-                onClick={handleCreateHold}
-                disabled={creatingHold || !quote?.quote}
-              >
-                {creatingHold ? "Apartando..." : "Apartar fecha"}
-              </button>
-            </div>
+                  <TextField
+                    label="Tipo de evento"
+                    value={form.eventType}
+                    onChange={(value) => update("eventType", value)}
+                    placeholder="Ej. boda, expo, evento corporativo"
+                  />
 
-            {hold?.bookingId && (
-              <div className="hold-card">
-                <div className="section-kicker">Paso 3</div>
-                <h3 style={{ marginTop: 6, marginBottom: 10 }}>
-                  Fecha apartada temporalmente
-                </h3>
+                  <div className="field">
+                    <label className="label">Hora de inicio</label>
+                    <input
+                      className="input"
+                      type="time"
+                      value={form.startTime}
+                      onChange={(e) => update("startTime", e.target.value)}
+                    />
+                  </div>
 
-                <div className="caption">
-                  Tu Java Coffee Cart quedó reservado temporalmente mientras completas el pago.
-                </div>
+                  <div className="field">
+                    <label className="label">Hora de término</label>
+                    <input
+                      className="input"
+                      type="time"
+                      value={form.endTime}
+                      onChange={(e) => update("endTime", e.target.value)}
+                    />
+                  </div>
 
-                <div className="countdown">
-                  {formatCountdown(remainingSeconds)}
-                </div>
+                  <div className="field full">
+                    <label className="label">
+                      ¿Para cuántos invitados necesitas el servicio?
+                    </label>
 
-                <div className="caption">
-                  Tiempo restante para iniciar el pago.
-                </div>
+                    <select
+                      className="select"
+                      value={form.guestCount}
+                      onChange={(e) =>
+                        update("guestCount", Number(e.target.value))
+                      }
+                    >
+                      {config.guestTiers.map((tier) => (
+                        <option key={tier.id} value={tier.guest_count}>
+                          {tier.guest_count} invitados ·{" "}
+                          {money(Number(tier.rate_per_guest_cents) / 100)} por invitado
+                        </option>
+                      ))}
+                    </select>
 
-                <div className="note">
-                  Booking ID: <strong>{hold.bookingId}</strong>
+                    <small className="caption">
+                      El precio base se calcula automáticamente según el número
+                      de invitados seleccionado.
+                    </small>
+                  </div>
                 </div>
 
                 <div className="action-row">
                   <button
-                    className="button button-primary"
-                    onClick={handleCheckout}
-                    disabled={startingCheckout || remainingSeconds === 0}
+                    className="button button-secondary"
+                    onClick={checkAvailability}
+                    disabled={busy === "availability"}
                   >
-                    {startingCheckout
-                      ? "Abriendo checkout..."
-                      : "Continuar al pago"}
+                    {busy === "availability"
+                      ? "Revisando fecha..."
+                      : "Verificar disponibilidad"}
                   </button>
                 </div>
 
-                <div className="note">
-                  El cliente y su teléfono quedarán asociados en Shopify.
+                {availability && (
+                  <div
+                    className={`status ${
+                      availability.available ? "success" : "error"
+                    }`}
+                  >
+                    {availability.message}
+                  </div>
+                )}
+
+                <div className="divider" style={{ margin: "30px 0" }} />
+
+                <div className="section-title">
+                  <div>
+                    <div className="section-kicker">2 · Lugar</div>
+                    <h3>¿Dónde instalaremos el Coffee Cart?</h3>
+                  </div>
                 </div>
-              </div>
+
+                <p className="caption">
+                  Estos datos nos ayudan a confirmar que podemos entrar, montar
+                  el equipo y operar el servicio correctamente.
+                </p>
+
+                <div className="form-grid">
+                  <TextField
+                    label="Nombre del lugar"
+                    value={form.venueName}
+                    onChange={(value) => update("venueName", value)}
+                    placeholder="Ej. Casa de Andrés, Salón XYZ"
+                  />
+                  <TextField
+                    label="Calle y número"
+                    value={form.eventAddress}
+                    onChange={(value) => update("eventAddress", value)}
+                    placeholder="Ej. Blvd. Independencia 123"
+                  />
+                  <TextField
+                    label="Colonia"
+                    value={form.neighborhood}
+                    onChange={(value) => update("neighborhood", value)}
+                  />
+                  <TextField
+                    label="Código postal"
+                    value={form.postalCode}
+                    onChange={(value) => update("postalCode", value)}
+                  />
+                </div>
+
+                <div className="divider" style={{ margin: "30px 0" }} />
+
+                <div className="section-title">
+                  <div>
+                    <div className="section-kicker">3 · Acceso y operación</div>
+                    <h3>Lo que necesitamos saber del lugar</h3>
+                  </div>
+                </div>
+
+                <div className="form-grid">
+                  <SelectField
+                    label="¿El Coffee Cart estará en interior o exterior?"
+                    value={form.indoorOutdoor}
+                    onChange={(value) => update("indoorOutdoor", value)}
+                    options={[
+                      ["", "Selecciona una opción"],
+                      ["INDOOR", "Interior"],
+                      ["OUTDOOR", "Exterior"],
+                      ["BOTH", "Parte interior y parte exterior"],
+                    ]}
+                  />
+
+                  <TextField
+                    label="¿En qué nivel o piso se instalará?"
+                    value={form.floor}
+                    onChange={(value) => update("floor", value)}
+                    placeholder="Ej. planta baja, segundo piso"
+                  />
+
+                  <SelectField
+                    label="¿Hay elevador disponible para mover equipo?"
+                    value={form.elevator}
+                    onChange={(value) => update("elevator", value)}
+                    options={[
+                      ["", "Selecciona una opción"],
+                      ["yes", "Sí"],
+                      ["no", "No"],
+                    ]}
+                  />
+
+                  <TextField
+                    label="¿Cómo es el acceso para descargar el equipo?"
+                    value={form.unloadingAccess}
+                    onChange={(value) => update("unloadingAccess", value)}
+                    placeholder="Ej. acceso directo por estacionamiento"
+                  />
+
+                  <div className="field">
+                    <label className="label">
+                      ¿Desde qué hora podemos entrar a montar?
+                    </label>
+                    <input
+                      className="input"
+                      type="datetime-local"
+                      value={form.setupAccessTime}
+                      onChange={(e) =>
+                        update("setupAccessTime", e.target.value)
+                      }
+                    />
+                  </div>
+
+                  <TextField
+                    label="Electricidad disponible"
+                    value={form.electricityDetails}
+                    onChange={(value) => update("electricityDetails", value)}
+                    placeholder="Ej. sí, contacto cercano al área del carrito"
+                  />
+
+                  <SelectField
+                    label="¿Hay agua potable disponible?"
+                    value={form.potableWater}
+                    onChange={(value) => update("potableWater", value)}
+                    options={[
+                      ["", "Selecciona una opción"],
+                      ["yes", "Sí"],
+                      ["no", "No"],
+                    ]}
+                  />
+
+                  <TextField
+                    label="Distancia aproximada al punto de agua (metros)"
+                    value={form.waterDistanceM}
+                    onChange={(value) => update("waterDistanceM", value)}
+                    placeholder="Ej. 5"
+                  />
+                </div>
+
+                <div className="divider" style={{ margin: "30px 0" }} />
+
+                <div className="section-title">
+                  <div>
+                    <div className="section-kicker">4 · Personaliza</div>
+                    <h3>Bebidas, alimentos y extras</h3>
+                  </div>
+                </div>
+
+                <div className="quote-card" style={{ marginBottom: 22 }}>
+                  <strong>¿Qué incluye el precio base?</strong>
+                  <p className="caption" style={{ marginBottom: 0 }}>
+                    Coffee Cart, equipo, montaje, personal asignado y servicio de
+                    espresso, americano, cappuccino, latte, mocha y té caliente
+                    para el número de invitados contratado.
+                  </p>
+                </div>
+
+                {Object.entries(groupedAddOns).map(([group, items]) => (
+                  <div key={group} style={{ marginBottom: 26 }}>
+                    <h4>{groupLabel(group)}</h4>
+
+                    <div className="check-grid">
+                      {items.map((addOn) => {
+                        const selected = form.selectedAddOns.find(
+                          (item) => item.code === addOn.code
+                        );
+
+                        return (
+                          <div className="check-card" key={addOn.id}>
+                            <input
+                              type="checkbox"
+                              checked={Boolean(selected)}
+                              onChange={() => toggleAddOn(addOn)}
+                            />
+
+                            <div style={{ flex: 1 }}>
+                              <div className="check-title">{addOn.name}</div>
+                              <div
+                                className="check-text"
+                                style={{ marginTop: 6, fontWeight: 700 }}
+                              >
+                                {addOnPriceLabel(addOn)}
+                              </div>
+                              <div
+                                className="check-text"
+                                style={{
+                                  marginTop: 6,
+                                  color: "#9f9f9f",
+                                  lineHeight: 1.6,
+                                }}
+                              >
+                                {addOnDescription(addOn)}
+                              </div>
+
+                              {selected &&
+                                ["PER_HOUR", "PER_UNIT"].includes(
+                                  addOn.pricing_type
+                                ) && (
+                                  <div style={{ marginTop: 12 }}>
+                                    <label className="label">
+                                      {addOn.pricing_type === "PER_HOUR"
+                                        ? "¿Cuántas horas adicionales?"
+                                        : "¿Cuántas unidades?"}
+                                    </label>
+
+                                    <input
+                                      className="input"
+                                      type="number"
+                                      min="1"
+                                      value={selected.quantity}
+                                      onChange={(e) =>
+                                        setAddOnQuantity(
+                                          addOn.code,
+                                          e.target.value
+                                        )
+                                      }
+                                    />
+                                  </div>
+                                )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+
+                <div className="action-row">
+                  <button
+                    className="button button-primary"
+                    onClick={calculateQuote}
+                    disabled={busy === "quote"}
+                  >
+                    {busy === "quote"
+                      ? "Calculando..."
+                      : "Calcular precio del evento"}
+                  </button>
+                </div>
+
+                {quote?.quote && (
+                  <div className="quote-card">
+                    <div className="quote-top">
+                      <div>
+                        <div className="quote-money-label">Tu evento</div>
+                        <div className="quote-place">{selectedArea?.city}</div>
+                        <div className="quote-meta">
+                          {form.guestCount} invitados ·{" "}
+                          {durationHours(form.startTime, form.endTime)} horas
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="quote-money-label">Total del evento</div>
+                        <div className="quote-money">
+                          {money(quote.quote.total)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: 20 }}>
+                      {quote.quote.items.map((item) => (
+                        <div
+                          key={`${item.code}-${item.quantity}`}
+                          style={{
+                            padding: "13px 0",
+                            borderBottom: "1px solid rgba(255,255,255,.08)",
+                          }}
+                        >
+                          <div className="summary-row">
+                            <span>{itemHumanLabel(item)}</span>
+                            <strong>{money(item.lineTotal)}</strong>
+                          </div>
+                          <div className="caption" style={{ marginTop: 4 }}>
+                            {itemCalculation(item)}
+                          </div>
+                        </div>
+                      ))}
+
+                      <div className="summary-row">
+                        <span>Subtotal antes de IVA</span>
+                        <strong>{money(quote.quote.subtotal)}</strong>
+                      </div>
+
+                      <div className="summary-row">
+                        <span>IVA {vatPercent.toFixed(0)}%</span>
+                        <strong>{money(quote.quote.vat)}</strong>
+                      </div>
+
+                      <div className="summary-row">
+                        <span>Total del evento</span>
+                        <strong>{money(quote.quote.total)}</strong>
+                      </div>
+
+                      <div className="summary-row" style={{ marginTop: 12 }}>
+                        <span>
+                          <strong>Lo que pagarás hoy</strong>
+                          <div className="caption">
+                            Anticipo para apartar la fecha
+                          </div>
+                        </span>
+                        <strong>{money(quote.quote.deposit)}</strong>
+                      </div>
+
+                      <div className="summary-row">
+                        <span>Saldo que quedará pendiente</span>
+                        <strong>{money(quote.quote.balance)}</strong>
+                      </div>
+
+                      <div className="note" style={{ marginTop: 16 }}>
+                        El total de tu evento es{" "}
+                        <strong>{money(quote.quote.total)}</strong>. Hoy no se
+                        cobra todo: hoy pagarás únicamente el anticipo de{" "}
+                        <strong>{money(quote.quote.deposit)}</strong>. El saldo de{" "}
+                        <strong>{money(quote.quote.balance)}</strong> quedará
+                        pendiente.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="divider" style={{ margin: "30px 0" }} />
+
+                <div className="section-title">
+                  <div>
+                    <div className="section-kicker">5 · Tus datos</div>
+                    <h3>¿Quién está reservando?</h3>
+                  </div>
+                </div>
+
+                <div className="form-grid">
+                  <TextField
+                    label="Nombre completo"
+                    value={form.customerName}
+                    onChange={(value) => update("customerName", value)}
+                  />
+                  <TextField
+                    label="Teléfono / WhatsApp"
+                    value={form.phone}
+                    onChange={(value) => update("phone", value)}
+                    placeholder="10 dígitos"
+                  />
+                  <TextField
+                    label="Correo electrónico"
+                    value={form.email}
+                    onChange={(value) => update("email", value)}
+                  />
+
+                  <label className="check-card">
+                    <input
+                      type="checkbox"
+                      checked={form.invoiceRequired}
+                      onChange={(e) =>
+                        update("invoiceRequired", e.target.checked)
+                      }
+                    />
+                    <div>
+                      <div className="check-title">Requiero factura</div>
+                      <div className="check-text">
+                        Actívalo si necesitas capturar datos fiscales.
+                      </div>
+                    </div>
+                  </label>
+
+                  {form.invoiceRequired && (
+                    <>
+                      <TextField
+                        label="Razón social"
+                        value={form.taxName}
+                        onChange={(value) => update("taxName", value)}
+                        placeholder="Como aparece en tu constancia fiscal"
+                      />
+                      <TextField
+                        label="RFC"
+                        value={form.taxRfc}
+                        onChange={(value) => update("taxRfc", value)}
+                      />
+                      <TextField
+                        label="Uso CFDI"
+                        value={form.taxUsage}
+                        onChange={(value) => update("taxUsage", value)}
+                        placeholder="Ej. G03 Gastos en general"
+                      />
+                    </>
+                  )}
+
+                  <div className="field full">
+                    <label className="label">
+                      Notas o instrucciones especiales
+                    </label>
+                    <textarea
+                      className="textarea"
+                      value={form.notes}
+                      onChange={(e) => update("notes", e.target.value)}
+                      placeholder="Cuéntanos cualquier restricción, acceso especial o detalle importante."
+                    />
+                  </div>
+                </div>
+
+                <label className="check-card" style={{ marginTop: 16 }}>
+                  <input
+                    type="checkbox"
+                    checked={form.termsAccepted}
+                    onChange={(e) =>
+                      update("termsAccepted", e.target.checked)
+                    }
+                  />
+
+                  <div>
+                    <div className="check-title">
+                      Entiendo qué estoy contratando y acepto las condiciones
+                      del servicio
+                    </div>
+                    <div className="check-text">
+                      Entiendo que estoy contratando un servicio de Java Coffee
+                      Cart para un evento, que el precio total aparece arriba,
+                      que hoy pagaré únicamente el anticipo para apartar la
+                      fecha y que el saldo restante no se cobra hoy.
+                    </div>
+                  </div>
+                </label>
+
+                <div className="action-row">
+                  <button
+                    className="button button-primary"
+                    disabled={busy === "hold"}
+                    onClick={createHold}
+                  >
+                    {busy === "hold"
+                      ? "Apartando fecha..."
+                      : "Apartar fecha con anticipo"}
+                  </button>
+                </div>
+
+                {hold && (
+                  <div className="hold-card">
+                    <div className="section-kicker">
+                      Fecha apartada temporalmente
+                    </div>
+
+                    <h3>{hold.eventOrderNumber}</h3>
+                    <div className="countdown">
+                      {formatCountdown(remaining)}
+                    </div>
+                    <div className="caption">
+                      Completa el pago del anticipo antes de que termine este
+                      tiempo.
+                    </div>
+
+                    <div className="quote-card" style={{ marginTop: 20 }}>
+                      <strong>Antes de pagar</strong>
+                      <p className="caption" style={{ marginBottom: 0 }}>
+                        Shopify abrirá el pago del anticipo. La pestaña de Java
+                        permanecerá abierta mostrando el estado de tu evento.
+                      </p>
+                    </div>
+
+                    <h4 style={{ marginTop: 25 }}>Documentos del lugar</h4>
+                    <p className="caption">
+                      Si los tienes a la mano, puedes subirlos ahora.
+                    </p>
+
+                    <UploadField
+                      label="Foto del lugar"
+                      onFile={(file) => uploadFile(file, "VENUE_PHOTO")}
+                    />
+                    <UploadField
+                      label="Foto del acceso"
+                      onFile={(file) => uploadFile(file, "ACCESS_PHOTO")}
+                    />
+                    <UploadField
+                      label="Layout o plano"
+                      onFile={(file) => uploadFile(file, "FLOOR_PLAN")}
+                    />
+                    <UploadField
+                      label="Archivo adicional"
+                      onFile={(file) => uploadFile(file, "ADDITIONAL_FILE")}
+                    />
+
+                    <div className="action-row">
+                      <button
+                        className="button button-primary"
+                        disabled={busy === "checkout" || remaining === 0}
+                        onClick={checkout}
+                      >
+                        {busy === "checkout"
+                          ? "Preparando pago..."
+                          : `Pagar anticipo de ${money(
+                              quote?.quote?.deposit || 0
+                            )}`}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
             {error && <div className="status error">{error}</div>}
@@ -811,96 +1396,84 @@ export default function Home() {
         </section>
 
         <aside className="panel summary-card">
-          <div className="summary-top">
-            <h3 className="summary-title">Resumen del evento</h3>
-            <div className="summary-text">
-              Un panel limpio para ver todo más claro mientras avanzas en el flujo.
-            </div>
-          </div>
+          <h3 className="summary-title">Resumen de tu evento</h3>
 
           <div className="summary-block">
             <div className="summary-row">
               <span>Ciudad</span>
               <strong>
-                {selectedArea
+                {form.serviceAreaId === "OTHER"
+                  ? "Otra ciudad"
+                  : selectedArea
                   ? `${selectedArea.city}, ${selectedArea.state}`
                   : "—"}
               </strong>
             </div>
 
             <div className="summary-row">
-              <span>Fecha</span>
-              <strong>
-                {form.eventDate ? formatDateShort(form.eventDate) : "—"}
-              </strong>
-            </div>
-
-            <div className="summary-row">
-              <span>Hora</span>
-              <strong>{form.startTime ? formatTime12(form.startTime) : "—"}</strong>
-            </div>
-
-            <div className="summary-row">
               <span>Invitados</span>
-              <strong>{form.guests || "—"}</strong>
+              <strong>{form.guestCount}</strong>
             </div>
 
             <div className="summary-row">
-              <span>Duración</span>
-              <strong>{form.durationHours || "—"} horas</strong>
+              <span>Fecha</span>
+              <strong>{form.eventDate || "—"}</strong>
+            </div>
+
+            <div className="summary-row">
+              <span>Horario</span>
+              <strong>
+                {form.startTime && form.endTime
+                  ? `${form.startTime} – ${form.endTime}`
+                  : "—"}
+              </strong>
             </div>
           </div>
 
-          <div className="summary-block">
-            <div className="summary-row">
-              <span>Total estimado</span>
-              <strong>
-                {quote?.quote ? formatMoney(quote.quote.total) : "—"}
-              </strong>
-            </div>
-
-            <div className="summary-row">
-              <span>Anticipo</span>
-              <strong>
-                {quote?.quote ? formatMoney(quote.quote.deposit) : "—"}
-              </strong>
-            </div>
-
-            <div className="summary-row">
-              <span>Saldo</span>
-              <strong>
-                {quote?.quote ? formatMoney(quote.quote.balance) : "—"}
-              </strong>
-            </div>
-
-            {quote?.quote && (
-              <div className="summary-big">
-                {formatMoney(quote.quote.total)}
+          {quote?.quote ? (
+            <>
+              <div className="summary-block">
+                <div className="summary-row">
+                  <span>Subtotal</span>
+                  <strong>{money(quote.quote.subtotal)}</strong>
+                </div>
+                <div className="summary-row">
+                  <span>IVA {vatPercent.toFixed(0)}%</span>
+                  <strong>{money(quote.quote.vat)}</strong>
+                </div>
+                <div className="summary-row">
+                  <span>Total del evento</span>
+                  <strong>{money(quote.quote.total)}</strong>
+                </div>
               </div>
-            )}
-          </div>
 
-          <div className="summary-block">
-            <div className="section-kicker">Esencia Java</div>
+              <div className="summary-block">
+                <div className="section-kicker" style={{ marginBottom: 8 }}>
+                  Pago de hoy
+                </div>
+                <div className="summary-big">
+                  {money(quote.quote.deposit)}
+                </div>
+                <div className="caption">
+                  Anticipo para apartar la fecha.
+                </div>
 
-            <div className="chips">
-              <div className="chip">Origen</div>
-              <div className="chip">Selección</div>
-              <div className="chip">Tueste</div>
-              <div className="chip">Empaque</div>
-              <div className="chip">Entrega</div>
+                <div className="summary-row" style={{ marginTop: 12 }}>
+                  <span>Saldo después del anticipo</span>
+                  <strong>{money(quote.quote.balance)}</strong>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="note">
+              Cuando calcules el precio, aquí verás claramente cuánto cuesta
+              todo el evento, cuánto pagarás hoy y cuánto quedará pendiente.
             </div>
+          )}
 
-            <div className="brand-quote">
-              Una experiencia de café pensada con calidez, mejor presentación y
-              un flujo de reserva más claro.
-            </div>
-          </div>
-
-          <div className="summary-block tiny">
-            Este nuevo diseño está pensado para verse mucho más premium y al mismo
-            tiempo convertir mejor: menos ruido, mejor jerarquía y un checkout
-            más entendible.
+          <div className="brand-quote">
+            Java calcula el precio y valida la disponibilidad desde el servidor
+            antes de permitir el pago.
           </div>
         </aside>
       </div>
@@ -908,73 +1481,86 @@ export default function Home() {
   );
 }
 
-function getActiveStep({ availability, quote, hold }) {
-  if (hold?.bookingId) return 4;
-  if (quote?.quote) return 3;
-  if (availability?.available) return 2;
-  return 1;
-}
-
-function onlyDigits(value) {
-  return String(value || "").replace(/\D/g, "");
-}
-
-function isValidMxPhone(value) {
-  const digits = onlyDigits(value);
-
+function ExplainerStep({ number, title, text }) {
   return (
-    digits.length === 10 ||
-    (digits.length === 12 && digits.startsWith("52")) ||
-    (digits.length === 13 && digits.startsWith("521"))
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "38px 1fr",
+        gap: 12,
+        alignItems: "start",
+      }}
+    >
+      <div
+        style={{
+          width: 34,
+          height: 34,
+          borderRadius: 999,
+          display: "grid",
+          placeItems: "center",
+          background: "rgba(240,90,34,.18)",
+          border: "1px solid rgba(240,90,34,.4)",
+          fontWeight: 800,
+        }}
+      >
+        {number}
+      </div>
+
+      <div>
+        <div style={{ fontWeight: 800, marginBottom: 3 }}>{title}</div>
+        <div className="caption">{text}</div>
+      </div>
+    </div>
   );
 }
 
-function formatMoney(amount) {
-  return new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: "MXN",
-  }).format(Number(amount || 0));
+function TextField({
+  label,
+  value,
+  onChange,
+  placeholder = "",
+}) {
+  return (
+    <div className="field">
+      <label className="label">{label}</label>
+      <input
+        className="input"
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
 }
 
-function formatDateLong(value) {
-  if (!value) return "—";
-
-  return new Intl.DateTimeFormat("es-MX", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(new Date(`${value}T00:00:00`));
+function SelectField({ label, value, onChange, options }) {
+  return (
+    <div className="field">
+      <label className="label">{label}</label>
+      <select
+        className="select"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {options.map(([optionValue, optionLabel]) => (
+          <option value={optionValue} key={optionValue}>
+            {optionLabel}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 }
 
-function formatDateShort(value) {
-  if (!value) return "—";
-
-  return new Intl.DateTimeFormat("es-MX", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date(`${value}T00:00:00`));
-}
-
-function formatTime12(value) {
-  if (!value) return "—";
-
-  const [h, m] = value.split(":");
-  const date = new Date();
-  date.setHours(Number(h), Number(m), 0, 0);
-
-  return new Intl.DateTimeFormat("es-MX", {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
-}
-
-function formatCountdown(totalSeconds) {
-  if (totalSeconds === null || totalSeconds === undefined) return "15:00";
-  if (totalSeconds <= 0) return "00:00";
-
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+function UploadField({ label, onFile }) {
+  return (
+    <div className="field" style={{ marginTop: 12 }}>
+      <label className="label">{label}</label>
+      <input
+        className="input"
+        type="file"
+        onChange={(e) => onFile(e.target.files?.[0])}
+      />
+    </div>
+  );
 }

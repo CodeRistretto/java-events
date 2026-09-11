@@ -1,770 +1,265 @@
+import crypto from "node:crypto";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { calculateEventPrice } from "@/lib/pricing";
+import {
+  calculateEventQuote,
+  centsToMoney,
+  getEventSettings,
+} from "@/lib/eventPricing";
+import {
+  getCandidateCarts,
+  releaseExpiredInventory,
+} from "@/lib/eventInventory";
+import { validateServiceAreaAddress } from "@/lib/serviceAreaValidation";
 import { normalizeMexicoPhone } from "@/lib/phone";
 
-function timeToMinutes(time) {
-  const [hours, minutes] =
-    String(time)
-      .slice(0, 5)
-      .split(":")
-      .map(Number);
-
-  return hours * 60 + minutes;
-}
-
-function rangesOverlap(
-  startA,
-  endA,
-  startB,
-  endB
-) {
-  return startA < endB && startB < endA;
-}
-
-function isValidEmail(value) {
+function validEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
     String(value || "").trim()
   );
 }
 
+function createOrderNumber() {
+  const ymd = new Date().toISOString().slice(0, 10).replaceAll("-", "");
+  return `JEV-${ymd}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+}
+
 export async function POST(request) {
   try {
-    const body =
-      await request.json();
+    const body = await request.json();
 
-    const {
-      serviceAreaId,
-      eventDate,
-      startTime,
-      guests,
+    const customerName = String(body.customerName || "").trim();
+    const email = String(body.email || "").trim().toLowerCase();
+    const phone = normalizeMexicoPhone(body.phone);
 
-      matchaBar = false,
-      extraBarista = false,
-
-      customerName,
-      email,
-      phone,
-
-      eventAddress = "",
-      eventType = "",
-      notes = "",
-
-      packageName =
-        "Java Coffee Cart",
-    } = body;
-
-    // Compatibilidad frontend nuevo/anterior.
-    const numberHours =
-      Number(
-        body.durationHours ??
-        body.hours
-      );
-
-    const numberGuests =
-      Number(
-        guests
-      );
-
-    // ============================================
-    // VALIDACIÓN
-    // ============================================
-
-    if (!serviceAreaId) {
-      return Response.json(
-        {
-          success: false,
-          error:
-            "Debes seleccionar una ciudad.",
-        },
-        {
-          status: 400,
-        }
-      );
+    if (!customerName) throw new Error("Escribe el nombre completo.");
+    if (!validEmail(email)) throw new Error("Ingresa un correo electrónico válido.");
+    if (!phone) throw new Error("Ingresa un teléfono mexicano válido de 10 dígitos.");
+    if (!body.eventDate) throw new Error("Selecciona la fecha del evento.");
+    if (!body.startTime) throw new Error("Selecciona la hora de inicio.");
+    if (!body.endTime) throw new Error("Selecciona la hora de término.");
+    if (!body.serviceAreaId) throw new Error("Selecciona una ciudad.");
+    if (!body.venueName) throw new Error("Ingresa el nombre del lugar.");
+    if (!body.eventAddress) throw new Error("Ingresa la calle y número.");
+    if (!body.neighborhood) throw new Error("Ingresa la colonia.");
+    if (!body.postalCode) throw new Error("Ingresa el código postal.");
+    if (!body.indoorOutdoor) throw new Error("Indica si el evento es interior o exterior.");
+    if (!body.floor) throw new Error("Indica el piso.");
+    if (body.elevator === undefined || body.elevator === null) {
+      throw new Error("Indica si hay elevador.");
     }
-
-    if (!eventDate) {
-      return Response.json(
-        {
-          success: false,
-          error:
-            "Selecciona la fecha del evento.",
-        },
-        {
-          status: 400,
-        }
-      );
+    if (!body.unloadingAccess) throw new Error("Describe el acceso de descarga.");
+    if (!body.setupAccessTime) throw new Error("Indica la hora de acceso para montaje.");
+    if (!body.electricityDetails) throw new Error("Describe la disponibilidad eléctrica.");
+    if (body.potableWater === undefined || body.potableWater === null) {
+      throw new Error("Indica si hay agua potable.");
     }
-
-    if (!startTime) {
-      return Response.json(
-        {
-          success: false,
-          error:
-            "Selecciona la hora del evento.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
     if (
-      !Number.isFinite(
-        numberGuests
-      ) ||
-      numberGuests < 1
+      body.waterDistanceM === "" ||
+      body.waterDistanceM === undefined ||
+      body.waterDistanceM === null
     ) {
+      throw new Error("Indica la distancia aproximada al agua.");
+    }
+    if (!body.termsAccepted) {
+      throw new Error("Debes aceptar las condiciones del servicio.");
+    }
+
+    if (body.invoiceRequired && (!body.taxName || !body.taxRfc)) {
+      throw new Error("Completa los datos fiscales para facturación.");
+    }
+
+    await validateServiceAreaAddress({
+      serviceAreaId: body.serviceAreaId,
+      postalCode: body.postalCode,
+      latitude: body.latitude ?? null,
+      longitude: body.longitude ?? null,
+    });
+
+    const quote = await calculateEventQuote({
+      serviceAreaId: body.serviceAreaId,
+      guestCount: Number(body.guestCount ?? body.guests),
+      selectedAddOns: Array.isArray(body.selectedAddOns)
+        ? body.selectedAddOns
+        : [],
+      paymentChoice: body.paymentChoice || null,
+    });
+
+    const settings = await getEventSettings();
+
+    await releaseExpiredInventory();
+
+    const candidates = await getCandidateCarts(
+      body.serviceAreaId,
+      body.eventDate
+    );
+
+    if (!candidates.length) {
       return Response.json(
         {
           success: false,
           error:
-            "Número de invitados inválido.",
+            "Esta fecha ya no está disponible para eventos de Java Coffee Cart. Selecciona otro día.",
         },
-        {
-          status: 400,
-        }
+        { status: 409 }
       );
     }
 
-    if (
-      !Number.isFinite(
-        numberHours
-      ) ||
-      numberHours < 1
-    ) {
-      return Response.json(
-        {
-          success: false,
-          error:
-            "Duración inválida.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
+    const holdExpiresAt = new Date(
+      Date.now() + Number(settings.hold_minutes) * 60 * 1000
+    ).toISOString();
 
-    if (
-      !customerName?.trim()
-    ) {
-      return Response.json(
-        {
-          success: false,
-          error:
-            "Escribe tu nombre completo.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
+    for (const cart of candidates) {
+      const eventOrderNumber = createOrderNumber();
 
-    if (
-      !isValidEmail(email)
-    ) {
-      return Response.json(
-        {
-          success: false,
-          error:
-            "Ingresa un correo electrónico válido.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    const normalizedPhone =
-      normalizeMexicoPhone(
-        phone
-      );
-
-    if (!normalizedPhone) {
-      return Response.json(
-        {
-          success: false,
-
-          error:
-            "Ingresa un teléfono mexicano válido de 10 dígitos.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    // ============================================
-    // ZONA
-    // ============================================
-
-    const {
-      data: serviceArea,
-      error: serviceAreaError,
-    } = await supabaseAdmin
-      .from("service_areas")
-      .select(
-        `
-        id,
-        city,
-        state,
-        active
-        `
-      )
-      .eq(
-        "id",
-        serviceAreaId
-      )
-      .eq(
-        "active",
-        true
-      )
-      .maybeSingle();
-
-    if (serviceAreaError) {
-      throw serviceAreaError;
-    }
-
-    if (!serviceArea) {
-      return Response.json(
-        {
-          success: false,
-
-          error:
-            "Java Coffee Cart todavía no está disponible en esta zona.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    // ============================================
-    // PRECIO
-    // ============================================
-
-    const quote =
-      calculateEventPrice({
-        guests:
-          numberGuests,
-
-        hours:
-          numberHours,
-
-        matchaBar:
-          Boolean(
-            matchaBar
+      const { data: booking, error: bookingError } = await supabaseAdmin
+        .from("bookings")
+        .insert({
+          customer_name: customerName,
+          email,
+          phone,
+          event_type: body.eventType || null,
+          city: quote.serviceArea.city,
+          state: quote.serviceArea.state,
+          event_address: body.eventAddress,
+          venue_name: body.venueName,
+          neighborhood: body.neighborhood,
+          postal_code: body.postalCode,
+          latitude: body.latitude ?? null,
+          longitude: body.longitude ?? null,
+          event_date: body.eventDate,
+          start_time: body.startTime,
+          duration_hours: Math.max(
+            1,
+            Number(body.durationHours || settings.standard_duration_hours)
           ),
+          guests: quote.guestCount,
+          package_name: "Java Coffee Cart",
+          matcha_bar: false,
+          extra_barista: false,
+          total: centsToMoney(quote.totalCents),
+          deposit: centsToMoney(quote.depositCents),
+          balance: centsToMoney(quote.balanceCents),
+          total_cents: quote.totalCents,
+          deposit_cents: quote.depositCents,
+          balance_cents: quote.balanceCents,
+          status: "HOLD",
+          hold_expires_at: holdExpiresAt,
+          coffee_cart_id: cart.id,
+          notes: body.notes || null,
+          event_order_number: eventOrderNumber,
+          indoor_outdoor: body.indoorOutdoor,
+          floor: body.floor,
+          elevator: Boolean(body.elevator),
+          unloading_access: body.unloadingAccess,
+          setup_access_time: body.setupAccessTime,
+          electricity_details: body.electricityDetails,
+          potable_water: Boolean(body.potableWater),
+          water_distance_m: Number(body.waterDistanceM),
+          invoice_required: Boolean(body.invoiceRequired),
+          tax_name: body.invoiceRequired ? body.taxName : null,
+          tax_rfc: body.invoiceRequired ? body.taxRfc : null,
+          tax_usage: body.invoiceRequired ? body.taxUsage || null : null,
+          terms_accepted_at: new Date().toISOString(),
+          selected_add_ons: body.selectedAddOns || [],
+          pricing_snapshot: quote,
+          payment_method: body.paymentMethod || null,
+        })
+        .select("*")
+        .single();
 
-        extraBarista:
-          Boolean(
-            extraBarista
-          ),
+      if (bookingError) throw bookingError;
+
+      const { error: capacityError } = await supabaseAdmin
+        .from("event_capacity_holds")
+        .insert({
+          booking_id: booking.id,
+          coffee_cart_id: cart.id,
+          event_date: body.eventDate,
+          status: "ACTIVE",
+          expires_at: holdExpiresAt,
+        });
+
+      if (capacityError) {
+        await supabaseAdmin.from("bookings").delete().eq("id", booking.id);
+
+        if (capacityError.code === "23505") {
+          continue;
+        }
+
+        throw capacityError;
+      }
+
+      const itemRows = quote.items.map((item) => ({
+        booking_id: booking.id,
+        item_type: item.itemType,
+        item_code: item.code,
+        item_name: item.name,
+        pricing_type: item.pricingType,
+        quantity: item.quantity,
+        unit_price_cents: item.unitPriceCents,
+        line_total_cents: item.lineTotalCents,
+        snapshot: item,
+      }));
+
+      if (itemRows.length) {
+        const { error: itemError } = await supabaseAdmin
+          .from("event_order_items")
+          .insert(itemRows);
+
+        if (itemError) throw itemError;
+      }
+
+      await supabaseAdmin.from("event_cart_assignments").insert({
+        booking_id: booking.id,
+        coffee_cart_id: cart.id,
+        assignment_type: "PRIMARY",
       });
 
-    // ============================================
-    // CARRITOS ASIGNADOS A ESTA ZONA
-    // ============================================
-
-    const {
-      data: assignments,
-      error: assignmentsError,
-    } = await supabaseAdmin
-      .from(
-        "coffee_cart_service_areas"
-      )
-      .select(
-        "coffee_cart_id"
-      )
-      .eq(
-        "service_area_id",
-        serviceAreaId
-      )
-      .eq(
-        "active",
-        true
-      );
-
-    if (assignmentsError) {
-      throw assignmentsError;
-    }
-
-    const cartIds =
-      (assignments || [])
-        .map(
-          (assignment) =>
-            assignment.coffee_cart_id
-        )
-        .filter(Boolean);
-
-    if (
-      cartIds.length === 0
-    ) {
-      return Response.json(
-        {
-          success: false,
-
-          error:
-            "Actualmente no hay un Java Coffee Cart asignado a esta zona.",
-        },
-        {
-          status: 409,
-        }
-      );
-    }
-
-    // ============================================
-    // CARRITOS ACTIVOS
-    // ============================================
-
-    const {
-      data: carts,
-      error: cartsError,
-    } = await supabaseAdmin
-      .from("coffee_carts")
-      .select(
-        `
-        id,
-        name,
-        code,
-        city,
-        active
-        `
-      )
-      .in(
-        "id",
-        cartIds
-      )
-      .eq(
-        "active",
-        true
-      );
-
-    if (cartsError) {
-      throw cartsError;
-    }
-
-    if (!carts?.length) {
-      return Response.json(
-        {
-          success: false,
-
-          error:
-            "Actualmente no hay un Java Coffee Cart activo para esta zona.",
-        },
-        {
-          status: 409,
-        }
-      );
-    }
-
-    // ============================================
-    // RESERVAS DEL DÍA
-    // ============================================
-
-    const {
-      data: bookings,
-      error: bookingsError,
-    } = await supabaseAdmin
-      .from("bookings")
-      .select(
-        `
-        id,
-        coffee_cart_id,
-        start_time,
-        duration_hours,
-        status,
-        hold_expires_at
-        `
-      )
-      .eq(
-        "event_date",
-        eventDate
-      )
-      .in(
-        "status",
-        [
-          "HOLD",
-          "PAYMENT_PENDING",
-          "CONFIRMED",
-        ]
-      );
-
-    if (bookingsError) {
-      throw bookingsError;
-    }
-
-    // ============================================
-    // BUFFER
-    // ============================================
-
-    const setupBufferMinutes =
-      90;
-
-    const teardownBufferMinutes =
-      60;
-
-    const requestedStart =
-      timeToMinutes(
-        startTime
-      );
-
-    const requestedEnd =
-      requestedStart +
-      numberHours * 60;
-
-    const requestedBlockStart =
-      requestedStart -
-      setupBufferMinutes;
-
-    const requestedBlockEnd =
-      requestedEnd +
-      teardownBufferMinutes;
-
-    const now =
-      new Date();
-
-    let availableCart =
-      null;
-
-    // ============================================
-    // REVALIDAR DISPONIBILIDAD
-    // ============================================
-
-    for (
-      const cart of carts
-    ) {
-      const cartBookings =
-        (bookings || [])
-          .filter(
-            (booking) => {
-              if (
-                booking
-                  .coffee_cart_id !==
-                cart.id
-              ) {
-                return false;
-              }
-
-              if (
-                (
-                  booking.status ===
-                    "HOLD" ||
-                  booking.status ===
-                    "PAYMENT_PENDING"
-                ) &&
-                booking
-                  .hold_expires_at
-              ) {
-                const expiration =
-                  new Date(
-                    booking
-                      .hold_expires_at
-                  );
-
-                if (
-                  expiration <=
-                  now
-                ) {
-                  return false;
-                }
-              }
-
-              return true;
-            }
-          );
-
-      const hasConflict =
-        cartBookings.some(
-          (booking) => {
-            const existingStart =
-              timeToMinutes(
-                booking.start_time
-              );
-
-            const existingEnd =
-              existingStart +
-              Number(
-                booking
-                  .duration_hours
-              ) *
-                60;
-
-            return rangesOverlap(
-              requestedBlockStart,
-              requestedBlockEnd,
-
-              existingStart -
-                setupBufferMinutes,
-
-              existingEnd +
-                teardownBufferMinutes
-            );
-          }
-        );
-
-      if (!hasConflict) {
-        availableCart =
-          cart;
-
-        break;
-      }
-    }
-
-    if (!availableCart) {
-      return Response.json(
-        {
-          success: false,
-
-          error:
-            "Todos los Java Coffee Carts asignados a esta zona están ocupados en ese horario.",
-        },
-        {
-          status: 409,
-        }
-      );
-    }
-
-    // ============================================
-    // HOLD
-    // ============================================
-
-    const holdMinutes =
-      15;
-
-    const holdExpiresAt =
-      new Date(
-        Date.now() +
-          holdMinutes *
-            60 *
-            1000
-      ).toISOString();
-
-    // ============================================
-    // BOOKING
-    // ============================================
-
-    const {
-      data: booking,
-      error: insertError,
-    } = await supabaseAdmin
-      .from("bookings")
-      .insert({
-        customer_name:
-          customerName.trim(),
-
-        email:
-          email
-            .trim()
-            .toLowerCase(),
-
-        phone:
-          normalizedPhone,
-
-        event_type:
-          eventType.trim() ||
-          null,
-
-        city:
-          serviceArea.city,
-
-        state:
-          serviceArea.state,
-
-        event_address:
-          eventAddress.trim() ||
-          null,
-
-        event_date:
-          eventDate,
-
-        start_time:
-          startTime,
-
-        duration_hours:
-          numberHours,
-
-        guests:
-          numberGuests,
-
-        package_name:
-          packageName,
-
-        matcha_bar:
-          Boolean(
-            matchaBar
-          ),
-
-        extra_barista:
-          Boolean(
-            extraBarista
-          ),
-
-        total:
-          quote.total,
-
-        deposit:
-          quote.deposit,
-
-        balance:
-          quote.balance,
-
-        status:
-          "HOLD",
-
-        hold_expires_at:
+      return Response.json({
+        success: true,
+        bookingId: booking.id,
+        eventOrderNumber,
+        holdExpiresAt,
+        hold: {
+          bookingId: booking.id,
+          expiresAt: holdExpiresAt,
           holdExpiresAt,
-
-        coffee_cart_id:
-          availableCart.id,
-
-        notes:
-          notes.trim() ||
-          null,
-      })
-      .select(
-        `
-        id,
-        event_date,
-        start_time,
-        duration_hours,
-        guests,
-        total,
-        deposit,
-        balance,
-        status,
-        hold_expires_at,
-        coffee_cart_id
-        `
-      )
-      .single();
-
-    if (insertError) {
-      throw insertError;
+          minutes: Number(settings.hold_minutes),
+        },
+        serviceArea: quote.serviceArea,
+        quote: {
+          total: centsToMoney(quote.totalCents),
+          deposit: centsToMoney(quote.depositCents),
+          balance: centsToMoney(quote.balanceCents),
+          totalCents: quote.totalCents,
+          depositCents: quote.depositCents,
+          balanceCents: quote.balanceCents,
+        },
+        cart: {
+          id: cart.id,
+          code: cart.code,
+          name: cart.name,
+        },
+      });
     }
-
-    // ============================================
-    // RESPUESTA
-    // ============================================
-
-    return Response.json({
-      success: true,
-
-      message:
-        "Tu fecha ha sido apartada temporalmente.",
-
-      bookingId:
-        booking.id,
-
-      holdExpiresAt:
-        booking
-          .hold_expires_at,
-
-      hold: {
-        bookingId:
-          booking.id,
-
-        expiresAt:
-          booking
-            .hold_expires_at,
-
-        holdExpiresAt:
-          booking
-            .hold_expires_at,
-
-        minutes:
-          holdMinutes,
-      },
-
-      booking: {
-        id:
-          booking.id,
-
-        status:
-          booking.status,
-
-        hold_expires_at:
-          booking
-            .hold_expires_at,
-      },
-
-      serviceArea: {
-        id:
-          serviceArea.id,
-
-        city:
-          serviceArea.city,
-
-        state:
-          serviceArea.state,
-      },
-
-      cart: {
-        id:
-          availableCart.id,
-
-        name:
-          availableCart.name,
-
-        code:
-          availableCart.code,
-      },
-
-      event: {
-        date:
-          booking.event_date,
-
-        startTime:
-          booking.start_time,
-
-        hours:
-          booking
-            .duration_hours,
-
-        durationHours:
-          booking
-            .duration_hours,
-
-        guests:
-          booking.guests,
-      },
-
-      quote: {
-        total:
-          Number(
-            booking.total
-          ),
-
-        deposit:
-          Number(
-            booking.deposit
-          ),
-
-        balance:
-          Number(
-            booking.balance
-          ),
-
-        currency:
-          "MXN",
-      },
-    });
-  } catch (error) {
-    console.error(
-      "Hold API error:",
-      error
-    );
 
     return Response.json(
       {
         success: false,
-
         error:
-          error.message ||
-          "No fue posible apartar el evento.",
+          "Otro cliente tomó la última disponibilidad. Selecciona otra fecha.",
       },
+      { status: 409 }
+    );
+  } catch (error) {
+    console.error("Hold API error:", error);
+
+    return Response.json(
       {
-        status: 500,
-      }
+        success: false,
+        error: error.message || "No fue posible apartar el evento.",
+      },
+      { status: 400 }
     );
   }
 }

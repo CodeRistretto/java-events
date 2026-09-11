@@ -3,49 +3,447 @@ import { shopifyGraphQL } from "@/lib/shopify";
 import { ensureShopifyCustomer } from "@/lib/shopifyCustomer";
 import { normalizeMexicoPhone } from "@/lib/phone";
 
-export const runtime =
-  "nodejs";
+export const runtime = "nodejs";
 
 function money(value) {
-  return Number(
-    value
-  ).toFixed(2);
+  return Number(value || 0).toFixed(2);
 }
 
-export async function POST(
-  request
-) {
+function centsToMoney(cents) {
+  return (Number(cents || 0) / 100).toFixed(2);
+}
+
+function asCents(centsValue, legacyMoneyValue) {
+  if (centsValue !== null && centsValue !== undefined) {
+    return Number(centsValue);
+  }
+
+  return Math.round(Number(legacyMoneyValue || 0) * 100);
+}
+
+function withinTolerance(actual, expected, tolerance = 2) {
+  return Math.abs(Number(actual) - Number(expected)) <= tolerance;
+}
+
+function eventAddressInput(booking, normalizedPhone) {
+  if (!booking.event_address || !booking.city) {
+    return null;
+  }
+
+  const parts = String(booking.customer_name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  const firstName = parts[0] || "Cliente";
+  const lastName = parts.slice(1).join(" ") || "Java Events";
+
+  return {
+    firstName,
+    lastName,
+    address1: booking.event_address,
+    city: booking.city,
+    zip: booking.postal_code || undefined,
+    countryCode: "MX",
+    phone: normalizedPhone,
+  };
+}
+
+function buildLineItem({
+  booking,
+  priceCents,
+  expectedVatCents,
+}) {
+  return {
+    title: `Anticipo Java Coffee Cart${
+      booking.event_order_number
+        ? ` · ${booking.event_order_number}`
+        : ""
+    }`,
+
+    quantity: 1,
+
+    originalUnitPriceWithCurrency: {
+      amount: centsToMoney(priceCents),
+      currencyCode: "MXN",
+    },
+
+    requiresShipping: false,
+    taxable: true,
+
+    customAttributes: [
+      {
+        key: "Qué estás pagando",
+        value: "Anticipo para apartar la fecha del evento",
+      },
+      {
+        key: "IVA esperado",
+        value: centsToMoney(expectedVatCents),
+      },
+      {
+        key: "Booking ID",
+        value: String(booking.id),
+      },
+      {
+        key: "Evento",
+        value: `${booking.event_date} ${booking.start_time}`,
+      },
+      {
+        key: "Ciudad",
+        value: booking.city,
+      },
+      {
+        key: "Invitados",
+        value: String(booking.guests),
+      },
+    ],
+  };
+}
+
+function baseDraftInput({
+  booking,
+  customer,
+  normalizedPhone,
+  lineItem,
+  confirmationUrl,
+}) {
+  const address = eventAddressInput(booking, normalizedPhone);
+
+  const input = {
+    purchasingEntity: {
+      customerId: customer.id,
+    },
+
+    email: booking.email,
+    phone: normalizedPhone,
+    presentmentCurrencyCode: "MXN",
+    taxExempt: false,
+    visibleToCustomer: true,
+
+    tags: [
+      "JAVA_EVENT",
+      "JAVA_COFFEE_CART",
+      "EVENT_DEPOSIT",
+    ],
+
+    note:
+      `JAVA COFFEE CART · EVENTO\n\n` +
+      `Número de evento: ${
+        booking.event_order_number || booking.id
+      }\n` +
+      `Cliente: ${booking.customer_name}\n` +
+      `WhatsApp: ${normalizedPhone}\n` +
+      `Tipo de evento: ${
+        booking.event_type || "No especificado"
+      }\n` +
+      `Lugar: ${
+        booking.venue_name || "No especificado"
+      }\n` +
+      `Ciudad: ${booking.city}, ${booking.state}\n` +
+      `Dirección: ${
+        booking.event_address || "No especificada"
+      }\n` +
+      `Fecha: ${booking.event_date}\n` +
+      `Hora: ${booking.start_time}\n` +
+      `Duración: ${booking.duration_hours} horas\n` +
+      `Invitados: ${booking.guests}\n\n` +
+      `QUÉ ESTÁ PAGANDO EL CLIENTE:\n` +
+      `Anticipo para apartar la fecha del evento.\n\n` +
+      `Total completo del evento: $${money(
+        booking.total
+      )} MXN\n` +
+      `Anticipo a pagar hoy: $${money(
+        booking.deposit
+      )} MXN\n` +
+      `Saldo pendiente: $${money(
+        booking.balance
+      )} MXN\n\n` +
+      `Estado del evento:\n${confirmationUrl}`,
+
+    customAttributes: [
+      {
+        key: "java_booking_id",
+        value: String(booking.id),
+      },
+      {
+        key: "event_order_number",
+        value: String(booking.event_order_number || ""),
+      },
+      {
+        key: "purchase_type",
+        value: "Anticipo para apartar fecha de evento",
+      },
+      {
+        key: "event_type",
+        value: String(booking.event_type || ""),
+      },
+      {
+        key: "event_city",
+        value: booking.city,
+      },
+      {
+        key: "event_date",
+        value: String(booking.event_date),
+      },
+      {
+        key: "event_time",
+        value: String(booking.start_time),
+      },
+      {
+        key: "event_guests",
+        value: String(booking.guests),
+      },
+      {
+        key: "event_total",
+        value: money(booking.total),
+      },
+      {
+        key: "amount_paid_today",
+        value: money(booking.deposit),
+      },
+      {
+        key: "event_balance",
+        value: money(booking.balance),
+      },
+      {
+        key: "confirmation_url",
+        value: confirmationUrl,
+      },
+    ],
+
+    lineItems: [lineItem],
+  };
+
+  if (address) {
+    input.shippingAddress = address;
+  }
+
+  return input;
+}
+
+async function calculateDraft(input) {
+  const mutation = `
+    mutation CalculateJavaEventDraft(
+      $input: DraftOrderInput!
+    ) {
+      draftOrderCalculate(
+        input: $input
+      ) {
+        calculatedDraftOrder {
+          taxesIncluded
+
+          subtotalPriceSet {
+            presentmentMoney {
+              amount
+              currencyCode
+            }
+          }
+
+          totalTaxSet {
+            presentmentMoney {
+              amount
+              currencyCode
+            }
+          }
+
+          totalPriceSet {
+            presentmentMoney {
+              amount
+              currencyCode
+            }
+          }
+
+          taxLines {
+            title
+            rate
+            ratePercentage
+
+            priceSet {
+              presentmentMoney {
+                amount
+                currencyCode
+              }
+            }
+          }
+        }
+
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+  `;
+
+  const result = await shopifyGraphQL(mutation, { input });
+
+  const payload = result?.draftOrderCalculate;
+  const userErrors = payload?.userErrors || [];
+
+  if (userErrors.length > 0) {
+    throw new Error(
+      userErrors.map((error) => error.message).join(" | ")
+    );
+  }
+
+  const calculated = payload?.calculatedDraftOrder;
+
+  if (!calculated) {
+    throw new Error("Shopify no pudo calcular el anticipo.");
+  }
+
+  return {
+    raw: calculated,
+
+    subtotalCents: Math.round(
+      Number(
+        calculated.subtotalPriceSet?.presentmentMoney?.amount || 0
+      ) * 100
+    ),
+
+    taxCents: Math.round(
+      Number(
+        calculated.totalTaxSet?.presentmentMoney?.amount || 0
+      ) * 100
+    ),
+
+    totalCents: Math.round(
+      Number(
+        calculated.totalPriceSet?.presentmentMoney?.amount || 0
+      ) * 100
+    ),
+
+    taxesIncluded: Boolean(calculated.taxesIncluded),
+  };
+}
+
+async function chooseShopifyTaxPlan({
+  booking,
+  customer,
+  normalizedPhone,
+  confirmationUrl,
+  depositCents,
+  vatBps,
+}) {
+  const rate = Number(vatBps || 0) / 10000;
+
+  if (!rate || rate <= 0) {
+    const lineItem = buildLineItem({
+      booking,
+      priceCents: depositCents,
+      expectedVatCents: 0,
+    });
+
+    return {
+      input: baseDraftInput({
+        booking,
+        customer,
+        normalizedPhone,
+        lineItem,
+        confirmationUrl,
+      }),
+      expectedVatCents: 0,
+      expectedSubtotalCents: depositCents,
+    };
+  }
+
+  const expectedSubtotalCents = Math.round(
+    depositCents / (1 + rate)
+  );
+
+  const expectedVatCents = depositCents - expectedSubtotalCents;
+
+  const candidates = [
+    {
+      name: "TAX_INCLUDED_PRICE",
+      linePriceCents: depositCents,
+    },
+    {
+      name: "TAX_EXCLUDED_PRICE",
+      linePriceCents: expectedSubtotalCents,
+    },
+  ];
+
+  const attempts = [];
+
+  for (const candidate of candidates) {
+    const lineItem = buildLineItem({
+      booking,
+      priceCents: candidate.linePriceCents,
+      expectedVatCents,
+    });
+
+    const input = baseDraftInput({
+      booking,
+      customer,
+      normalizedPhone,
+      lineItem,
+      confirmationUrl,
+    });
+
+    const calculated = await calculateDraft(input);
+
+    attempts.push({
+      ...candidate,
+      calculated,
+    });
+
+    const totalMatches = withinTolerance(
+      calculated.totalCents,
+      depositCents
+    );
+
+    const vatMatches = withinTolerance(
+      calculated.taxCents,
+      expectedVatCents
+    );
+
+    if (totalMatches && vatMatches) {
+      return {
+        input,
+        expectedVatCents,
+        expectedSubtotalCents,
+        calculated,
+        mode: candidate.name,
+      };
+    }
+  }
+
+  console.error("Shopify tax calculation mismatch", {
+    depositCents,
+    expectedSubtotalCents,
+    expectedVatCents,
+    vatBps,
+    attempts,
+  });
+
+  throw new Error(
+    `Shopify no está calculando el IVA configurado correctamente. ` +
+      `El anticipo esperado es ${centsToMoney(
+        depositCents
+      )} MXN, con IVA de ${centsToMoney(
+        expectedVatCents
+      )} MXN. ` +
+      `Revisa Shopify > Settings > Taxes and duties antes de aceptar el pago.`
+  );
+}
+
+export async function POST(request) {
   try {
-    const body =
-      await request.json();
-
-    const {
-      bookingId,
-    } = body;
-
-    // ============================================
-    // BOOKING ID
-    // ============================================
+    const body = await request.json();
+    const { bookingId } = body;
 
     if (!bookingId) {
       return Response.json(
         {
           success: false,
-          error:
-            "No se recibió el identificador de la reservación.",
+          error: "No se recibió el identificador de la reservación.",
         },
         { status: 400 }
       );
     }
 
-    // ============================================
-    // CARGAR BOOKING
-    // ============================================
-
-    const {
-      data: booking,
-      error: bookingError,
-    } = await supabaseAdmin
+    const { data: booking, error: bookingError } = await supabaseAdmin
       .from("bookings")
       .select(`
         id,
@@ -55,27 +453,28 @@ export async function POST(
         event_type,
         city,
         state,
+        postal_code,
         event_address,
+        venue_name,
         event_date,
         start_time,
         duration_hours,
         guests,
-        package_name,
-        matcha_bar,
-        extra_barista,
         total,
         deposit,
         balance,
+        total_cents,
+        deposit_cents,
+        balance_cents,
+        pricing_snapshot,
+        event_order_number,
         status,
         hold_expires_at,
         shopify_customer_id,
         shopify_draft_order_id,
         shopify_order_id
       `)
-      .eq(
-        "id",
-        bookingId
-      )
+      .eq("id", bookingId)
       .maybeSingle();
 
     if (bookingError) {
@@ -86,89 +485,59 @@ export async function POST(
       return Response.json(
         {
           success: false,
-          error:
-            "No encontramos esta reservación.",
+          error: "No encontramos esta reservación.",
         },
         { status: 404 }
       );
     }
 
-    // ============================================
-    // YA CONFIRMADO
-    // ============================================
+    const appBaseUrl =
+      process.env.APP_BASE_URL || "http://localhost:3000";
+
+    const confirmationUrl =
+      `${appBaseUrl}/confirmation/${booking.id}`;
 
     if (
-      booking
-        .shopify_order_id ||
-      booking.status ===
-        "CONFIRMED"
+      booking.shopify_order_id ||
+      booking.status === "CONFIRMED"
     ) {
       return Response.json({
         success: true,
-
-        alreadyPaid:
-          true,
-
-        message:
-          "Este evento ya se encuentra confirmado.",
+        alreadyPaid: true,
+        message: "Este evento ya se encuentra confirmado.",
+        confirmationUrl,
       });
     }
 
-    // ============================================
-    // ESTATUS PERMITIDOS
-    // ============================================
-
-    if (
-      ![
-        "HOLD",
-        "PAYMENT_PENDING",
-      ].includes(
-        booking.status
-      )
-    ) {
+    if (!["HOLD", "PAYMENT_PENDING"].includes(booking.status)) {
       return Response.json(
         {
           success: false,
-          error:
-            "Esta reservación ya no está disponible para pago.",
+          error: "Esta reservación ya no está disponible para pago.",
         },
         { status: 409 }
       );
     }
 
-    // ============================================
-    // HOLD VIGENTE
-    // ============================================
+    if (booking.hold_expires_at) {
+      const expiration = new Date(booking.hold_expires_at);
 
-    if (
-      booking
-        .hold_expires_at
-    ) {
-      const expiration =
-        new Date(
-          booking
-            .hold_expires_at
-        );
-
-      if (
-        expiration.getTime() <=
-        Date.now()
-      ) {
+      if (expiration.getTime() <= Date.now()) {
         await supabaseAdmin
           .from("bookings")
           .update({
-            status:
-              "EXPIRED",
+            status: "EXPIRED",
           })
-          .eq(
-            "id",
-            booking.id
-          );
+          .eq("id", booking.id);
+
+        await supabaseAdmin
+          .from("event_capacity_holds")
+          .delete()
+          .eq("booking_id", booking.id);
 
         return Response.json(
           {
             success: false,
-
             error:
               "El tiempo de apartado terminó. Vuelve a consultar disponibilidad.",
           },
@@ -177,20 +546,12 @@ export async function POST(
       }
     }
 
-    // ============================================
-    // NORMALIZAR TELÉFONO OTRA VEZ
-    // ============================================
-
-    const normalizedPhone =
-      normalizeMexicoPhone(
-        booking.phone
-      );
+    const normalizedPhone = normalizeMexicoPhone(booking.phone);
 
     if (!normalizedPhone) {
       return Response.json(
         {
           success: false,
-
           error:
             "El teléfono almacenado no es válido. Debe contener 10 dígitos mexicanos.",
         },
@@ -198,164 +559,128 @@ export async function POST(
       );
     }
 
-    // ============================================
-    // ANTICIPO
-    // ============================================
+    const depositCents = asCents(
+      booking.deposit_cents,
+      booking.deposit
+    );
 
-    const deposit =
-      Number(
-        booking.deposit
-      );
-
-    if (
-      !Number.isFinite(
-        deposit
-      ) ||
-      deposit <= 0
-    ) {
+    if (!Number.isFinite(depositCents) || depositCents <= 0) {
       return Response.json(
         {
           success: false,
-
-          error:
-            "El anticipo no es válido.",
+          error: "El anticipo no es válido.",
         },
         { status: 400 }
       );
     }
 
-    // ============================================
-    // CREAR / ACTUALIZAR CLIENTE SHOPIFY
-    // ============================================
+    const vatBps = Number(
+      booking.pricing_snapshot?.vatBps ?? 1600
+    );
 
-    const customer =
-      await ensureShopifyCustomer(
-        {
-          email:
-            booking.email,
+    const customer = await ensureShopifyCustomer({
+      email: booking.email,
+      phone: normalizedPhone,
+      customerName: booking.customer_name,
+    });
 
-          phone:
-            normalizedPhone,
-
-          customerName:
-            booking
-              .customer_name,
-        }
-      );
-
-    // Guardamos relación.
     await supabaseAdmin
       .from("bookings")
       .update({
-        phone:
-          normalizedPhone,
-
-        shopify_customer_id:
-          customer.id,
+        phone: normalizedPhone,
+        shopify_customer_id: customer.id,
       })
-      .eq(
-        "id",
-        booking.id
-      );
+      .eq("id", booking.id);
 
-    // ============================================
-    // DRAFT ORDER YA EXISTENTE
-    // ============================================
-
-    if (
-      booking
-        .shopify_draft_order_id
-    ) {
-      const existingData =
-        await shopifyGraphQL(
-          `
-          query ExistingJavaDraft(
-            $id: ID!
+    if (booking.shopify_draft_order_id) {
+      const existingData = await shopifyGraphQL(
+        `
+        query ExistingJavaDraft(
+          $id: ID!
+        ) {
+          draftOrder(
+            id: $id
           ) {
-            draftOrder(
-              id: $id
-            ) {
-              id
-              name
-              invoiceUrl
-              status
+            id
+            name
+            invoiceUrl
+            status
 
-              order {
-                id
+            subtotalPriceSet {
+              presentmentMoney {
+                amount
+                currencyCode
               }
             }
-          }
-          `,
-          {
-            id:
-              booking
-                .shopify_draft_order_id,
-          }
-        );
 
-      const existingDraft =
-        existingData
-          ?.draftOrder;
+            totalTaxSet {
+              presentmentMoney {
+                amount
+                currencyCode
+              }
+            }
 
-      if (
-        existingDraft
-          ?.order?.id
-      ) {
+            totalPriceSet {
+              presentmentMoney {
+                amount
+                currencyCode
+              }
+            }
+
+            order {
+              id
+            }
+          }
+        }
+        `,
+        {
+          id: booking.shopify_draft_order_id,
+        }
+      );
+
+      const existingDraft = existingData?.draftOrder;
+
+      if (existingDraft?.order?.id) {
         await supabaseAdmin
           .from("bookings")
           .update({
-            status:
-              "CONFIRMED",
-
-            shopify_order_id:
-              existingDraft
-                .order.id,
+            status: "CONFIRMED",
+            shopify_order_id: existingDraft.order.id,
+            confirmed_at: new Date().toISOString(),
           })
-          .eq(
-            "id",
-            booking.id
-          );
+          .eq("id", booking.id);
 
         return Response.json({
-          success:
-            true,
-
-          alreadyPaid:
-            true,
-
-          message:
-            "Este evento ya fue pagado.",
+          success: true,
+          alreadyPaid: true,
+          message: "Este evento ya fue pagado.",
+          confirmationUrl,
         });
       }
 
-      if (
-        existingDraft
-          ?.invoiceUrl
-      ) {
+      if (existingDraft?.invoiceUrl) {
         return Response.json({
-          success:
-            true,
-
-          checkoutUrl:
-            existingDraft
-              .invoiceUrl,
-
-          draftOrderId:
-            existingDraft.id,
-
-          reused:
-            true,
-
-          holdExpiresAt:
-            booking
-              .hold_expires_at,
+          success: true,
+          checkoutUrl: existingDraft.invoiceUrl,
+          draftOrderId: existingDraft.id,
+          reused: true,
+          holdExpiresAt: booking.hold_expires_at,
+          confirmationUrl,
+          shopifyTax: Number(
+            existingDraft.totalTaxSet?.presentmentMoney?.amount || 0
+          ),
         });
       }
     }
 
-    // ============================================
-    // CREAR DRAFT ORDER
-    // ============================================
+    const taxPlan = await chooseShopifyTaxPlan({
+      booking,
+      customer,
+      normalizedPhone,
+      confirmationUrl,
+      depositCents,
+      vatBps,
+    });
 
     const mutation = `
       mutation CreateJavaEventDraft(
@@ -371,6 +696,7 @@ export async function POST(
             status
             phone
             email
+            taxesIncluded
 
             purchasingEntity {
               ... on Customer {
@@ -380,10 +706,37 @@ export async function POST(
               }
             }
 
+            subtotalPriceSet {
+              presentmentMoney {
+                amount
+                currencyCode
+              }
+            }
+
+            totalTaxSet {
+              presentmentMoney {
+                amount
+                currencyCode
+              }
+            }
+
             totalPriceSet {
               presentmentMoney {
                 amount
                 currencyCode
+              }
+            }
+
+            taxLines {
+              title
+              rate
+              ratePercentage
+
+              priceSet {
+                presentmentMoney {
+                  amount
+                  currencyCode
+                }
               }
             }
           }
@@ -396,284 +749,82 @@ export async function POST(
       }
     `;
 
-    const variables = {
-      input: {
-        // Cliente real de Shopify.
-        purchasingEntity: {
-          customerId:
-            customer.id,
-        },
+    const result = await shopifyGraphQL(mutation, {
+      input: taxPlan.input,
+    });
 
-        email:
-          booking.email,
+    const payload = result?.draftOrderCreate;
+    const userErrors = payload?.userErrors || [];
 
-        phone:
-          normalizedPhone,
-
-        presentmentCurrencyCode:
-          "MXN",
-
-        tags: [
-          "JAVA_EVENT",
-          "JAVA_COFFEE_CART",
-          "EVENT_DEPOSIT",
-        ],
-
-        note:
-          `Java Coffee Cart Event\n` +
-          `Booking ID: ${booking.id}\n` +
-          `Cliente: ${booking.customer_name}\n` +
-          `WhatsApp: ${normalizedPhone}\n` +
-          `Tipo: ${booking.event_type || "No especificado"}\n` +
-          `Ciudad: ${booking.city}, ${booking.state}\n` +
-          `Dirección: ${booking.event_address || "No especificada"}\n` +
-          `Fecha: ${booking.event_date}\n` +
-          `Hora: ${booking.start_time}\n` +
-          `Duración: ${booking.duration_hours} horas\n` +
-          `Invitados: ${booking.guests}\n` +
-          `Matcha Bar: ${booking.matcha_bar ? "Sí" : "No"}\n` +
-          `Barista adicional: ${booking.extra_barista ? "Sí" : "No"}\n` +
-          `Total evento: $${money(booking.total)} MXN\n` +
-          `Anticipo: $${money(booking.deposit)} MXN\n` +
-          `Saldo: $${money(booking.balance)} MXN`,
-
-        customAttributes: [
-          {
-            key:
-              "java_booking_id",
-
-            value:
-              String(
-                booking.id
-              ),
-          },
-
-          {
-            key:
-              "event_type",
-
-            value:
-              String(
-                booking
-                  .event_type ||
-                  ""
-              ),
-          },
-
-          {
-            key:
-              "event_city",
-
-            value:
-              booking.city,
-          },
-
-          {
-            key:
-              "event_address",
-
-            value:
-              String(
-                booking
-                  .event_address ||
-                  ""
-              ),
-          },
-
-          {
-            key:
-              "event_date",
-
-            value:
-              String(
-                booking
-                  .event_date
-              ),
-          },
-
-          {
-            key:
-              "event_time",
-
-            value:
-              String(
-                booking
-                  .start_time
-              ),
-          },
-
-          {
-            key:
-              "event_guests",
-
-            value:
-              String(
-                booking.guests
-              ),
-          },
-
-          {
-            key:
-              "event_total",
-
-            value:
-              money(
-                booking.total
-              ),
-          },
-
-          {
-            key:
-              "event_balance",
-
-            value:
-              money(
-                booking.balance
-              ),
-          },
-        ],
-
-        lineItems: [
-          {
-            title:
-              "Anticipo Java Coffee Cart",
-
-            quantity: 1,
-
-            originalUnitPriceWithCurrency: {
-              amount:
-                money(
-                  deposit
-                ),
-
-              currencyCode:
-                "MXN",
-            },
-
-            requiresShipping:
-              false,
-
-            // Para pruebas.
-            // Revisaremos impuestos antes
-            // de producción.
-            taxable:
-              false,
-
-            customAttributes: [
-              {
-                key:
-                  "Booking ID",
-
-                value:
-                  String(
-                    booking.id
-                  ),
-              },
-
-              {
-                key:
-                  "Evento",
-
-                value:
-                  `${booking.event_date} ${booking.start_time}`,
-              },
-
-              {
-                key:
-                  "Ciudad",
-
-                value:
-                  booking.city,
-              },
-            ],
-          },
-        ],
-      },
-    };
-
-    const result =
-      await shopifyGraphQL(
-        mutation,
-        variables
-      );
-
-    const payload =
-      result
-        ?.draftOrderCreate;
-
-    const userErrors =
-      payload?.userErrors ||
-      [];
-
-    if (
-      userErrors.length > 0
-    ) {
+    if (userErrors.length > 0) {
       return Response.json(
         {
           success: false,
-
-          error:
-            userErrors
-              .map(
-                (error) =>
-                  error.message
-              )
-              .join(" | "),
+          error: userErrors.map((error) => error.message).join(" | "),
         },
         { status: 400 }
       );
     }
 
-    const draftOrder =
-      payload
-        ?.draftOrder;
+    const draftOrder = payload?.draftOrder;
 
-    if (
-      !draftOrder?.id ||
-      !draftOrder
-        ?.invoiceUrl
-    ) {
+    if (!draftOrder?.id || !draftOrder?.invoiceUrl) {
       throw new Error(
         "Shopify no devolvió un checkout válido."
       );
     }
 
-    // ============================================
-    // EXTENDER TIEMPO A 30 MIN.
-    // ============================================
+    const finalTaxCents = Math.round(
+      Number(
+        draftOrder.totalTaxSet?.presentmentMoney?.amount || 0
+      ) * 100
+    );
 
-    const checkoutHoldExpiresAt =
-      new Date(
-        Date.now() +
-          30 *
-            60 *
-            1000
-      ).toISOString();
+    const finalTotalCents = Math.round(
+      Number(
+        draftOrder.totalPriceSet?.presentmentMoney?.amount || 0
+      ) * 100
+    );
 
-    const {
-      error: updateError,
-    } = await supabaseAdmin
+    if (
+      !withinTolerance(
+        finalTaxCents,
+        taxPlan.expectedVatCents
+      ) ||
+      !withinTolerance(
+        finalTotalCents,
+        depositCents
+      )
+    ) {
+      throw new Error(
+        "Shopify creó un borrador con impuestos distintos a la cotización de Java. No continúes con ese pago; revisa la configuración fiscal de Shopify."
+      );
+    }
+
+    const { data: settings } = await supabaseAdmin
+      .from("event_settings")
+      .select("checkout_hold_minutes")
+      .eq("id", 1)
+      .maybeSingle();
+
+    const checkoutMinutes = Number(
+      settings?.checkout_hold_minutes || 30
+    );
+
+    const checkoutHoldExpiresAt = new Date(
+      Date.now() + checkoutMinutes * 60 * 1000
+    ).toISOString();
+
+    const { error: updateError } = await supabaseAdmin
       .from("bookings")
       .update({
-        status:
-          "PAYMENT_PENDING",
-
-        phone:
-          normalizedPhone,
-
-        shopify_customer_id:
-          customer.id,
-
-        shopify_draft_order_id:
-          draftOrder.id,
-
-        hold_expires_at:
-          checkoutHoldExpiresAt,
+        status: "PAYMENT_PENDING",
+        phone: normalizedPhone,
+        shopify_customer_id: customer.id,
+        shopify_draft_order_id: draftOrder.id,
+        hold_expires_at: checkoutHoldExpiresAt,
       })
-      .eq(
-        "id",
-        booking.id
-      );
+      .eq("id", booking.id);
 
     if (updateError) {
       throw updateError;
@@ -681,42 +832,36 @@ export async function POST(
 
     return Response.json({
       success: true,
+      checkoutUrl: draftOrder.invoiceUrl,
+      confirmationUrl,
+      draftOrderId: draftOrder.id,
+      draftOrderName: draftOrder.name,
+      customerId: customer.id,
+      reused: false,
+      holdExpiresAt: checkoutHoldExpiresAt,
 
-      checkoutUrl:
-        draftOrder
-          .invoiceUrl,
-
-      draftOrderId:
-        draftOrder.id,
-
-      draftOrderName:
-        draftOrder.name,
-
-      customerId:
-        customer.id,
-
-      customerPhone:
-        normalizedPhone,
-
-      reused:
-        false,
-
-      holdExpiresAt:
-        checkoutHoldExpiresAt,
+      paymentBreakdown: {
+        currency: "MXN",
+        subtotal: Number(
+          draftOrder.subtotalPriceSet?.presentmentMoney?.amount || 0
+        ),
+        tax: Number(
+          draftOrder.totalTaxSet?.presentmentMoney?.amount || 0
+        ),
+        total: Number(
+          draftOrder.totalPriceSet?.presentmentMoney?.amount || 0
+        ),
+        taxesIncluded: Boolean(draftOrder.taxesIncluded),
+      },
     });
   } catch (error) {
-    console.error(
-      "Checkout API error:",
-      error
-    );
+    console.error("Checkout API error:", error);
 
     return Response.json(
       {
         success: false,
-
         error:
-          error.message ||
-          "No fue posible iniciar el pago.",
+          error.message || "No fue posible iniciar el pago.",
       },
       { status: 500 }
     );
