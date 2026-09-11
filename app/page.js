@@ -1,1899 +1,980 @@
 "use client";
 
-import {
-  useEffect,
-  useState,
-} from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import {
-  formatMexicoPhoneInput,
-  isValidMexicoPhone,
-} from "@/lib/phone";
+const INITIAL_FORM = {
+  serviceAreaId: "",
+  eventDate: "",
+  startTime: "16:00",
+  guests: 50,
+  durationHours: 2,
+  matchaBar: false,
+  extraBarista: false,
+  customerName: "",
+  email: "",
+  phone: "",
+  eventType: "",
+  eventAddress: "",
+  notes: "",
+};
 
 export default function Home() {
-  // ============================================
-  // EVENTO
-  // ============================================
+  const [serviceAreas, setServiceAreas] = useState([]);
+  const [form, setForm] = useState(INITIAL_FORM);
 
-  const [
-    serviceAreas,
-    setServiceAreas,
-  ] = useState([]);
+  const [availability, setAvailability] = useState(null);
+  const [quote, setQuote] = useState(null);
+  const [hold, setHold] = useState(null);
 
-  const [
-    serviceAreaId,
-    setServiceAreaId,
-  ] = useState("");
+  const [loadingAreas, setLoadingAreas] = useState(true);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
+  const [calculatingQuote, setCalculatingQuote] = useState(false);
+  const [creatingHold, setCreatingHold] = useState(false);
+  const [startingCheckout, setStartingCheckout] = useState(false);
 
-  const [
-    eventDate,
-    setEventDate,
-  ] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [remainingSeconds, setRemainingSeconds] = useState(null);
 
-  const [
-    startTime,
-    setStartTime,
-  ] = useState("");
-
-  const [
-    guests,
-    setGuests,
-  ] = useState(50);
-
-  const [
-    hours,
-    setHours,
-  ] = useState(2);
-
-  const [
-    matchaBar,
-    setMatchaBar,
-  ] = useState(false);
-
-  const [
-    extraBarista,
-    setExtraBarista,
-  ] = useState(false);
-
-  // ============================================
-  // CLIENTE
-  // ============================================
-
-  const [
-    customerName,
-    setCustomerName,
-  ] = useState("");
-
-  const [
-    email,
-    setEmail,
-  ] = useState("");
-
-  const [
-    phone,
-    setPhone,
-  ] = useState("");
-
-  const [
-    phoneError,
-    setPhoneError,
-  ] = useState("");
-
-  const [
-    eventType,
-    setEventType,
-  ] = useState("");
-
-  const [
-    eventAddress,
-    setEventAddress,
-  ] = useState("");
-
-  // ============================================
-  // RESULTADOS
-  // ============================================
-
-  const [
-    quote,
-    setQuote,
-  ] = useState(null);
-
-  const [
-    availability,
-    setAvailability,
-  ] = useState(null);
-
-  const [
-    hold,
-    setHold,
-  ] = useState(null);
-
-  const [
-    secondsRemaining,
-    setSecondsRemaining,
-  ] = useState(0);
-
-  // ============================================
-  // LOADING
-  // ============================================
-
-  const [
-    loadingCities,
-    setLoadingCities,
-  ] = useState(true);
-
-  const [
-    loadingQuote,
-    setLoadingQuote,
-  ] = useState(false);
-
-  const [
-    checkingAvailability,
-    setCheckingAvailability,
-  ] = useState(false);
-
-  const [
-    creatingHold,
-    setCreatingHold,
-  ] = useState(false);
-
-  const [
-    creatingCheckout,
-    setCreatingCheckout,
-  ] = useState(false);
-
-  const [
-    error,
-    setError,
-  ] = useState("");
-
-  // ============================================
-  // CARGAR CIUDADES
-  // ============================================
+  const selectedArea = useMemo(() => {
+    return (
+      serviceAreas.find((area) => area.id === form.serviceAreaId) || null
+    );
+  }, [serviceAreas, form.serviceAreaId]);
 
   useEffect(() => {
-    async function loadServiceAreas() {
-      try {
-        setLoadingCities(true);
-
-        const response =
-          await fetch(
-            "/api/service-areas",
-            {
-              cache:
-                "no-store",
-            }
-          );
-
-        const data =
-          await response.json();
-
-        if (
-          !response.ok ||
-          !data.success
-        ) {
-          throw new Error(
-            data.error ||
-              "No fue posible cargar las ciudades."
-          );
-        }
-
-        const areas =
-          data.serviceAreas ||
-          [];
-
-        setServiceAreas(
-          areas
-        );
-
-        if (
-          areas.length >
-          0
-        ) {
-          setServiceAreaId(
-            areas[0].id
-          );
-        }
-      } catch (err) {
-        setError(
-          err.message
-        );
-      } finally {
-        setLoadingCities(
-          false
-        );
-      }
-    }
-
     loadServiceAreas();
   }, []);
 
-  // ============================================
-  // TIMER
-  // ============================================
-
   useEffect(() => {
-    if (
-      !hold?.expiresAt
-    ) {
+    if (!hold?.holdExpiresAt) {
+      setRemainingSeconds(null);
       return;
     }
 
-    const updateTimer =
-      () => {
-        const seconds =
-          Math.max(
-            0,
-
-            Math.floor(
-              (
-                new Date(
-                  hold.expiresAt
-                ).getTime() -
-                Date.now()
-              ) /
-                1000
-            )
-          );
-
-        setSecondsRemaining(
-          seconds
-        );
-      };
-
-    updateTimer();
-
-    const interval =
-      setInterval(
-        updateTimer,
-        1000
-      );
-
-    return () =>
-      clearInterval(
-        interval
-      );
-  }, [
-    hold?.expiresAt,
-  ]);
-
-  // ============================================
-  // HELPERS
-  // ============================================
-
-  function getServiceAreaId() {
-    return (
-      serviceAreaId ||
-      serviceAreas[0]?.id ||
-      ""
-    );
-  }
-
-  function resetResults() {
-    if (hold) {
-      return;
+    function updateCountdown() {
+      const end = new Date(hold.holdExpiresAt).getTime();
+      const now = Date.now();
+      const diff = Math.max(0, Math.floor((end - now) / 1000));
+      setRemainingSeconds(diff);
     }
 
-    setAvailability(
-      null
-    );
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
 
-    setQuote(
-      null
-    );
+    return () => clearInterval(interval);
+  }, [hold?.holdExpiresAt]);
 
-    setError(
-      ""
-    );
-  }
+  async function apiGet(url) {
+    const response = await fetch(url, {
+      cache: "no-store",
+    });
 
-  function formatMoney(
-    value
-  ) {
-    return new Intl.NumberFormat(
-      "es-MX",
-      {
-        style:
-          "currency",
+    let data = {};
 
-        currency:
-          "MXN",
-      }
-    ).format(
-      value
-    );
-  }
-
-  function formatDate(
-    value
-  ) {
-    if (!value) {
-      return "";
-    }
-
-    const [
-      year,
-      month,
-      day,
-    ] =
-      value
-        .split("-")
-        .map(Number);
-
-    return new Intl.DateTimeFormat(
-      "es-MX",
-      {
-        day:
-          "numeric",
-
-        month:
-          "long",
-
-        year:
-          "numeric",
-      }
-    ).format(
-      new Date(
-        year,
-        month - 1,
-        day
-      )
-    );
-  }
-
-  function formatTime(
-    value
-  ) {
-    if (!value) {
-      return "";
-    }
-
-    const [
-      hour,
-      minute,
-    ] =
-      value
-        .slice(0, 5)
-        .split(":")
-        .map(Number);
-
-    const date =
-      new Date();
-
-    date.setHours(
-      hour,
-      minute,
-      0,
-      0
-    );
-
-    return new Intl.DateTimeFormat(
-      "es-MX",
-      {
-        hour:
-          "numeric",
-
-        minute:
-          "2-digit",
-
-        hour12:
-          true,
-      }
-    ).format(
-      date
-    );
-  }
-
-  function formatCountdown(
-    seconds
-  ) {
-    const minutes =
-      Math.floor(
-        seconds / 60
-      );
-
-    const remaining =
-      seconds % 60;
-
-    return `${String(
-      minutes
-    ).padStart(
-      2,
-      "0"
-    )}:${String(
-      remaining
-    ).padStart(
-      2,
-      "0"
-    )}`;
-  }
-
-  // ============================================
-  // DISPONIBILIDAD
-  // ============================================
-
-  async function checkAvailability() {
     try {
-      setCheckingAvailability(
-        true
+      data = await response.json();
+    } catch {
+      data = {};
+    }
+
+    if (!response.ok || data.success === false) {
+      throw new Error(
+        data.error || "No fue posible completar la solicitud."
       );
+    }
 
-      setError(
-        ""
+    return data;
+  }
+
+  async function apiPost(url, body) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    let data = {};
+
+    try {
+      data = await response.json();
+    } catch {
+      data = {};
+    }
+
+    if (!response.ok || data.success === false) {
+      throw new Error(
+        data.error || "No fue posible completar la solicitud."
       );
+    }
 
-      setAvailability(
-        null
-      );
+    return data;
+  }
 
-      if (!eventDate) {
-        throw new Error(
-          "Selecciona la fecha."
-        );
-      }
+  async function loadServiceAreas() {
+    try {
+      setLoadingAreas(true);
+      setError("");
 
-      if (!startTime) {
-        throw new Error(
-          "Selecciona la hora."
-        );
-      }
+      const data = await apiGet("/api/service-areas");
 
-      const response =
-        await fetch(
-          "/api/availability",
-          {
-            method:
-              "POST",
+      const areas = data.serviceAreas || [];
 
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
+      setServiceAreas(areas);
 
-            body:
-              JSON.stringify({
-                serviceAreaId:
-                  getServiceAreaId(),
-
-                eventDate,
-
-                startTime,
-
-                hours:
-                  Number(
-                    hours
-                  ),
-              }),
-          }
-        );
-
-      const data =
-        await response.json();
-
-      if (
-        !response.ok ||
-        !data.success
-      ) {
-        throw new Error(
-          data.error ||
-            "No fue posible verificar disponibilidad."
-        );
-      }
-
-      setAvailability(
-        data
-      );
-
-      if (
-        !data.available
-      ) {
-        setError(
-          data.message ||
-            "No hay disponibilidad."
-        );
+      if (areas.length > 0) {
+        setForm((prev) => ({
+          ...prev,
+          serviceAreaId: prev.serviceAreaId || areas[0].id,
+        }));
       }
     } catch (err) {
-      setError(
-        err.message
-      );
+      setError(err.message);
     } finally {
-      setCheckingAvailability(
-        false
+      setLoadingAreas(false);
+    }
+  }
+
+  function updateField(key, value) {
+    setForm((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  }
+
+  function resetDownstream(from = "availability") {
+    if (from === "availability") {
+      setAvailability(null);
+      setQuote(null);
+      setHold(null);
+      setSuccess("");
+    }
+
+    if (from === "quote") {
+      setQuote(null);
+      setHold(null);
+      setSuccess("");
+    }
+
+    if (from === "hold") {
+      setHold(null);
+      setSuccess("");
+    }
+  }
+
+  function validateStep1() {
+    if (!form.serviceAreaId) {
+      throw new Error("Selecciona una ciudad.");
+    }
+
+    if (!form.eventDate) {
+      throw new Error("Selecciona la fecha del evento.");
+    }
+
+    if (!form.startTime) {
+      throw new Error("Selecciona la hora de inicio.");
+    }
+
+    if (!Number(form.guests) || Number(form.guests) < 1) {
+      throw new Error("Ingresa un número válido de invitados.");
+    }
+
+    if (!Number(form.durationHours) || Number(form.durationHours) < 1) {
+      throw new Error("Selecciona una duración válida.");
+    }
+  }
+
+  function validateCustomerStep() {
+    if (!form.customerName.trim()) {
+      throw new Error("Ingresa el nombre del cliente.");
+    }
+
+    if (!form.email.trim()) {
+      throw new Error("Ingresa el correo electrónico.");
+    }
+
+    if (!/\S+@\S+\.\S+/.test(form.email.trim())) {
+      throw new Error("Ingresa un correo electrónico válido.");
+    }
+
+    if (!isValidMxPhone(form.phone)) {
+      throw new Error(
+        "Ingresa un teléfono válido. Usa 10 dígitos de México."
       );
     }
   }
 
-  // ============================================
-  // COTIZAR
-  // ============================================
-
-  async function calculateQuote() {
+  async function handleCheckAvailability() {
     try {
-      setLoadingQuote(
-        true
-      );
+      setCheckingAvailability(true);
+      setError("");
+      setSuccess("");
+      validateStep1();
+      resetDownstream("availability");
 
-      setError(
-        ""
-      );
-
-      const response =
-        await fetch(
-          "/api/quote",
-          {
-            method:
-              "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-
-            body:
-              JSON.stringify({
-                serviceAreaId:
-                  getServiceAreaId(),
-
-                guests:
-                  Number(
-                    guests
-                  ),
-
-                hours:
-                  Number(
-                    hours
-                  ),
-
-                matchaBar,
-
-                extraBarista,
-              }),
-          }
-        );
-
-      const data =
-        await response.json();
-
-      if (
-        !response.ok ||
-        !data.success
-      ) {
-        throw new Error(
-          data.error ||
-            "No fue posible cotizar."
-        );
-      }
-
-      setQuote(
-        data
-      );
-    } catch (err) {
-      setError(
-        err.message
-      );
-    } finally {
-      setLoadingQuote(
-        false
-      );
-    }
-  }
-
-  // ============================================
-  // HOLD
-  // ============================================
-
-  async function createHold() {
-    try {
-      setCreatingHold(
-        true
-      );
-
-      setError(
-        ""
-      );
-
-      setPhoneError(
-        ""
-      );
-
-      if (
-        !availability
-          ?.available
-      ) {
-        throw new Error(
-          "Primero verifica la disponibilidad."
-        );
-      }
-
-      if (!quote) {
-        throw new Error(
-          "Primero genera la cotización."
-        );
-      }
-
-      if (
-        !customerName.trim()
-      ) {
-        throw new Error(
-          "Escribe tu nombre."
-        );
-      }
-
-      if (
-        !email.trim()
-      ) {
-        throw new Error(
-          "Escribe tu correo."
-        );
-      }
-
-      if (
-        !isValidMexicoPhone(
-          phone
-        )
-      ) {
-        setPhoneError(
-          "Ingresa 10 dígitos. Ejemplo: 871 123 4567."
-        );
-
-        throw new Error(
-          "Revisa tu número de WhatsApp."
-        );
-      }
-
-      const response =
-        await fetch(
-          "/api/hold",
-          {
-            method:
-              "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-
-            body:
-              JSON.stringify({
-                serviceAreaId:
-                  getServiceAreaId(),
-
-                eventDate,
-
-                startTime,
-
-                guests:
-                  Number(
-                    guests
-                  ),
-
-                hours:
-                  Number(
-                    hours
-                  ),
-
-                matchaBar,
-
-                extraBarista,
-
-                customerName,
-
-                email,
-
-                phone,
-
-                eventType,
-
-                eventAddress,
-              }),
-          }
-        );
-
-      const data =
-        await response.json();
-
-      if (
-        !response.ok ||
-        !data.success
-      ) {
-        throw new Error(
-          data.error ||
-            "No fue posible apartar la fecha."
-        );
-      }
-
-      setHold(
-        data.hold
-      );
-
-      setQuote({
-        serviceArea:
-          data.serviceArea,
-
-        quote:
-          data.quote,
+      const data = await apiPost("/api/availability", {
+        serviceAreaId: form.serviceAreaId,
+        eventDate: form.eventDate,
+        startTime: form.startTime,
+        durationHours: Number(form.durationHours),
       });
-    } catch (err) {
-      setError(
-        err.message
-      );
-    } finally {
-      setCreatingHold(
-        false
-      );
-    }
-  }
 
-  // ============================================
-  // CHECKOUT
-  // ============================================
-
-  async function continueToPayment() {
-    try {
-      setCreatingCheckout(
-        true
-      );
-
-      setError(
-        ""
-      );
-
-      if (
-        !hold?.bookingId
-      ) {
-        throw new Error(
-          "No encontramos la reservación."
-        );
-      }
-
-      const response =
-        await fetch(
-          "/api/checkout",
-          {
-            method:
-              "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-
-            body:
-              JSON.stringify({
-                bookingId:
-                  hold.bookingId,
-              }),
-          }
-        );
-
-      const data =
-        await response.json();
-
-      if (
-        !response.ok ||
-        !data.success
-      ) {
-        throw new Error(
-          data.error ||
-            "No fue posible iniciar el pago."
-        );
-      }
-
-      if (
-        data.holdExpiresAt
-      ) {
-        setHold(
-          (current) => ({
-            ...current,
-
-            expiresAt:
-              data.holdExpiresAt,
-          })
-        );
-      }
-
-      if (
-        data.alreadyPaid
-      ) {
+      if (!data.available) {
         throw new Error(
           data.message ||
-            "Este evento ya está pagado."
+            "No hay disponibilidad para la fecha y horario seleccionados."
         );
       }
 
-      if (
-        !data.checkoutUrl
-      ) {
-        throw new Error(
-          "Shopify no devolvió un enlace de pago."
-        );
-      }
-
-      window.location.assign(
-        data.checkoutUrl
-      );
+      setAvailability(data);
+      setSuccess("Disponibilidad confirmada. Ya puedes cotizar tu evento.");
     } catch (err) {
-      setError(
-        err.message
-      );
-
-      console.error(
-        err
-      );
+      setError(err.message);
     } finally {
-      setCreatingCheckout(
-        false
-      );
+      setCheckingAvailability(false);
     }
   }
 
-  // ============================================
-  // UI
-  // ============================================
+  async function handleCalculateQuote() {
+    try {
+      setCalculatingQuote(true);
+      setError("");
+      setSuccess("");
+
+      validateStep1();
+
+      if (!availability?.available) {
+        throw new Error("Primero verifica la disponibilidad.");
+      }
+
+      resetDownstream("quote");
+
+      const data = await apiPost("/api/quote", {
+        serviceAreaId: form.serviceAreaId,
+        guests: Number(form.guests),
+        hours: Number(form.durationHours),
+        matchaBar: form.matchaBar,
+        extraBarista: form.extraBarista,
+      });
+
+      setQuote(data);
+      setSuccess("Cotización generada. Ahora captura los datos del cliente.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCalculatingQuote(false);
+    }
+  }
+
+  async function handleCreateHold() {
+    try {
+      setCreatingHold(true);
+      setError("");
+      setSuccess("");
+
+      validateStep1();
+      validateCustomerStep();
+
+      if (!quote?.quote) {
+        throw new Error("Primero genera la cotización.");
+      }
+
+      const data = await apiPost("/api/hold", {
+        serviceAreaId: form.serviceAreaId,
+        eventDate: form.eventDate,
+        startTime: form.startTime,
+        durationHours: Number(form.durationHours),
+        guests: Number(form.guests),
+        matchaBar: form.matchaBar,
+        extraBarista: form.extraBarista,
+        customerName: form.customerName.trim(),
+        email: form.email.trim().toLowerCase(),
+        phone: onlyDigits(form.phone),
+        eventType: form.eventType.trim(),
+        eventAddress: form.eventAddress.trim(),
+        notes: form.notes.trim(),
+        packageName: "Java Coffee Cart",
+        total: quote.quote.total,
+        deposit: quote.quote.deposit,
+        balance: quote.quote.balance,
+      });
+
+      const bookingId = data.bookingId || data.booking?.id || null;
+      const holdExpiresAt =
+        data.holdExpiresAt ||
+        data.booking?.hold_expires_at ||
+        data.booking?.holdExpiresAt ||
+        null;
+
+      if (!bookingId) {
+        throw new Error("No se recibió el booking ID de la reserva.");
+      }
+
+      setHold({
+        bookingId,
+        holdExpiresAt,
+        data,
+      });
+
+      setSuccess("Fecha apartada correctamente. Ya puedes continuar al pago.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCreatingHold(false);
+    }
+  }
+
+  async function handleCheckout() {
+    try {
+      setStartingCheckout(true);
+      setError("");
+      setSuccess("");
+
+      if (!hold?.bookingId) {
+        throw new Error("Primero aparta la fecha.");
+      }
+
+      if (remainingSeconds !== null && remainingSeconds <= 0) {
+        throw new Error(
+          "El tiempo para completar el pago expiró. Genera una nueva reserva."
+        );
+      }
+
+      const data = await apiPost("/api/checkout", {
+        bookingId: hold.bookingId,
+      });
+
+      const checkoutUrl =
+        data.checkoutUrl ||
+        data.invoiceUrl ||
+        data.url ||
+        data.checkout?.url ||
+        null;
+
+      if (!checkoutUrl) {
+        throw new Error("No se recibió la URL de checkout.");
+      }
+
+      window.location.href = checkoutUrl;
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setStartingCheckout(false);
+    }
+  }
+
+  const activeStep = getActiveStep({
+    availability,
+    quote,
+    hold,
+  });
 
   return (
-    <main style={styles.main}>
-      <div style={styles.container}>
-        <div style={styles.header}>
-          <div style={styles.brand}>
-            JAVA TIMES CAFFÉ
+    <main className="app-shell">
+      <section className="hero">
+        <div className="hero-bg" />
+        <div className="container hero-inner">
+          <div className="eyebrow">
+            <span className="eyebrow-dot" />
+            Java Times Caffé · Eventos
           </div>
 
-          <h1 style={styles.title}>
-            Java Coffee Cart
-          </h1>
+          <div className="hero-grid">
+            <div className="hero-copy">
+              <h1 className="hero-title">
+                Java Coffee Cart <span>para eventos memorables</span>
+              </h1>
 
-          <p style={styles.subtitle}>
-            Cotiza, consulta disponibilidad y reserva tu evento.
-          </p>
+              <p className="hero-subtitle">
+                Cotiza, aparta y paga tu evento en un flujo mucho más claro.
+                Inspirado en la esencia de Java: producto real, calidez,
+                experiencia y una presentación premium.
+              </p>
+
+              <div className="hero-pills">
+                <div className="hero-pill">Origen</div>
+                <div className="hero-pill">Tueste</div>
+                <div className="hero-pill">Experiencia</div>
+                <div className="hero-pill">Entrega profesional</div>
+              </div>
+            </div>
+
+            <div className="hero-card">
+              <div className="hero-card-label">Flujo de reserva</div>
+              <h2 className="hero-card-title">De la cotización al checkout</h2>
+              <p>
+                Primero validas disponibilidad, después generas la cotización,
+                apartas la fecha temporalmente y terminas el pago en Shopify.
+              </p>
+
+              <div className="hero-micro-grid">
+                <div className="micro-box">
+                  <div className="micro-kicker">Paso 1</div>
+                  <div className="micro-value">Evento</div>
+                </div>
+
+                <div className="micro-box">
+                  <div className="micro-kicker">Paso 2</div>
+                  <div className="micro-value">Cotización</div>
+                </div>
+
+                <div className="micro-box">
+                  <div className="micro-kicker">Paso 3</div>
+                  <div className="micro-value">Apartado</div>
+                </div>
+
+                <div className="micro-box">
+                  <div className="micro-kicker">Paso 4</div>
+                  <div className="micro-value">Checkout</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
+      </section>
 
-        <div style={styles.card}>
-          <FieldLabel>
-            Ciudad del evento
-          </FieldLabel>
-
-          <select
-            value={
-              serviceAreaId
-            }
-            disabled={
-              loadingCities ||
-              Boolean(hold)
-            }
-            onChange={(e) => {
-              setServiceAreaId(
-                e.target.value
-              );
-
-              resetResults();
-            }}
-            style={styles.input}
-          >
-            {serviceAreas.map(
-              (area) => (
-                <option
-                  key={area.id}
-                  value={area.id}
-                >
-                  {area.city},{" "}
-                  {area.state}
-                </option>
-              )
-            )}
-          </select>
-
-          <FieldLabel>
-            Fecha del evento
-          </FieldLabel>
-
-          <input
-            type="date"
-            value={eventDate}
-            disabled={
-              Boolean(hold)
-            }
-            onChange={(e) => {
-              setEventDate(
-                e.target.value
-              );
-
-              resetResults();
-            }}
-            style={styles.input}
-          />
-
-          <FieldLabel>
-            Hora de inicio
-          </FieldLabel>
-
-          <select
-            value={startTime}
-            disabled={
-              Boolean(hold)
-            }
-            onChange={(e) => {
-              setStartTime(
-                e.target.value
-              );
-
-              resetResults();
-            }}
-            style={styles.input}
-          >
-            <option value="">
-              Selecciona una hora
-            </option>
-
-            {[
-              ["08:00", "8:00 AM"],
-              ["09:00", "9:00 AM"],
-              ["10:00", "10:00 AM"],
-              ["11:00", "11:00 AM"],
-              ["12:00", "12:00 PM"],
-              ["13:00", "1:00 PM"],
-              ["14:00", "2:00 PM"],
-              ["15:00", "3:00 PM"],
-              ["16:00", "4:00 PM"],
-              ["17:00", "5:00 PM"],
-              ["18:00", "6:00 PM"],
-              ["19:00", "7:00 PM"],
-              ["20:00", "8:00 PM"],
-            ].map(
-              ([value, label]) => (
-                <option
-                  key={value}
-                  value={value}
-                >
-                  {label}
-                </option>
-              )
-            )}
-          </select>
-
-          <FieldLabel>
-            Número de invitados
-          </FieldLabel>
-
-          <input
-            type="number"
-            min="1"
-            value={guests}
-            disabled={
-              Boolean(hold)
-            }
-            onChange={(e) => {
-              setGuests(
-                e.target.value
-              );
-
-              setQuote(null);
-            }}
-            style={styles.input}
-          />
-
-          <FieldLabel>
-            Duración
-          </FieldLabel>
-
-          <select
-            value={hours}
-            disabled={
-              Boolean(hold)
-            }
-            onChange={(e) => {
-              setHours(
-                e.target.value
-              );
-
-              resetResults();
-            }}
-            style={styles.input}
-          >
-            <option value="2">
-              2 horas
-            </option>
-
-            <option value="3">
-              3 horas
-            </option>
-
-            <option value="4">
-              4 horas
-            </option>
-
-            <option value="5">
-              5 horas
-            </option>
-          </select>
-
-          <div style={styles.extras}>
-            <label>
-              <input
-                type="checkbox"
-                checked={
-                  matchaBar
-                }
-                disabled={
-                  Boolean(hold)
-                }
-                onChange={(e) => {
-                  setMatchaBar(
-                    e.target.checked
-                  );
-
-                  setQuote(null);
-                }}
-              />{" "}
-              Matcha Bar
-            </label>
-
-            <label>
-              <input
-                type="checkbox"
-                checked={
-                  extraBarista
-                }
-                disabled={
-                  Boolean(hold)
-                }
-                onChange={(e) => {
-                  setExtraBarista(
-                    e.target.checked
-                  );
-
-                  setQuote(null);
-                }}
-              />{" "}
-              Barista adicional
-            </label>
+      <div className="container page-grid">
+        <section className="panel">
+          <div className="panel-header">
+            <h2 className="panel-title">Cotiza tu evento</h2>
+            <p className="panel-subtitle">
+              Elige ciudad, fecha y horario. Después validamos disponibilidad,
+              generamos la cotización y apartamos tu fecha antes de enviarte al
+              pago.
+            </p>
           </div>
 
-          {!hold && (
-            <>
+          <div className="stepbar">
+            <div className={`stepbar-item ${activeStep >= 1 ? "active" : ""} ${availability?.available ? "done" : ""}`}>
+              <div className="stepbar-number">1</div>
+              <div className="stepbar-label">Evento</div>
+              <div className="stepbar-desc">Ciudad, fecha, hora y tamaño del evento.</div>
+            </div>
+
+            <div className={`stepbar-item ${activeStep >= 2 ? "active" : ""} ${quote?.quote ? "done" : ""}`}>
+              <div className="stepbar-number">2</div>
+              <div className="stepbar-label">Cotización</div>
+              <div className="stepbar-desc">Calculamos total, anticipo y saldo.</div>
+            </div>
+
+            <div className={`stepbar-item ${activeStep >= 3 ? "active" : ""} ${hold?.bookingId ? "done" : ""}`}>
+              <div className="stepbar-number">3</div>
+              <div className="stepbar-label">Apartado</div>
+              <div className="stepbar-desc">Reservamos temporalmente tu fecha.</div>
+            </div>
+
+            <div className={`stepbar-item ${activeStep >= 4 ? "active" : ""}`}>
+              <div className="stepbar-number">4</div>
+              <div className="stepbar-label">Pago</div>
+              <div className="stepbar-desc">Continúas a Shopify Checkout.</div>
+            </div>
+          </div>
+
+          <div className="form-section">
+            <div className="section-title">
+              <div>
+                <div className="section-kicker">Paso 1</div>
+                <h3>Detalles del evento</h3>
+              </div>
+            </div>
+
+            <div className="form-grid">
+              <div className="field full">
+                <label className="label">Ciudad del evento</label>
+                <select
+                  className="select"
+                  value={form.serviceAreaId}
+                  onChange={(e) => {
+                    updateField("serviceAreaId", e.target.value);
+                    resetDownstream("availability");
+                  }}
+                  disabled={loadingAreas}
+                >
+                  <option value="">
+                    {loadingAreas
+                      ? "Cargando ciudades..."
+                      : "Selecciona una ciudad"}
+                  </option>
+
+                  {serviceAreas.map((area) => (
+                    <option key={area.id} value={area.id}>
+                      {area.city}, {area.state}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="field">
+                <label className="label">Fecha del evento</label>
+                <input
+                  className="input"
+                  type="date"
+                  value={form.eventDate}
+                  onChange={(e) => {
+                    updateField("eventDate", e.target.value);
+                    resetDownstream("availability");
+                  }}
+                />
+              </div>
+
+              <div className="field">
+                <label className="label">Hora de inicio</label>
+                <input
+                  className="input"
+                  type="time"
+                  value={form.startTime}
+                  onChange={(e) => {
+                    updateField("startTime", e.target.value);
+                    resetDownstream("availability");
+                  }}
+                />
+              </div>
+
+              <div className="field">
+                <label className="label">Número de invitados</label>
+                <input
+                  className="input"
+                  type="number"
+                  min="1"
+                  value={form.guests}
+                  onChange={(e) => {
+                    updateField("guests", Number(e.target.value));
+                    resetDownstream("quote");
+                  }}
+                />
+              </div>
+
+              <div className="field">
+                <label className="label">Duración del evento</label>
+                <select
+                  className="select"
+                  value={form.durationHours}
+                  onChange={(e) => {
+                    updateField("durationHours", Number(e.target.value));
+                    resetDownstream("availability");
+                  }}
+                >
+                  <option value={2}>2 horas</option>
+                  <option value={3}>3 horas</option>
+                  <option value={4}>4 horas</option>
+                  <option value={5}>5 horas</option>
+                  <option value={6}>6 horas</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="check-grid">
+              <label className="check-card">
+                <input
+                  type="checkbox"
+                  checked={form.matchaBar}
+                  onChange={(e) => {
+                    updateField("matchaBar", e.target.checked);
+                    resetDownstream("quote");
+                  }}
+                />
+                <div>
+                  <div className="check-title">Matcha Bar</div>
+                  <div className="check-text">
+                    Agrega una estación complementaria de matcha para elevar la experiencia.
+                  </div>
+                </div>
+              </label>
+
+              <label className="check-card">
+                <input
+                  type="checkbox"
+                  checked={form.extraBarista}
+                  onChange={(e) => {
+                    updateField("extraBarista", e.target.checked);
+                    resetDownstream("quote");
+                  }}
+                />
+                <div>
+                  <div className="check-title">Barista adicional</div>
+                  <div className="check-text">
+                    Ideal para eventos con mayor flujo y mejor velocidad de atención.
+                  </div>
+                </div>
+              </label>
+            </div>
+
+            <div className="action-row">
               <button
-                onClick={
-                  checkAvailability
-                }
-                disabled={
-                  checkingAvailability
-                }
-                style={
-                  styles.secondaryButton
-                }
+                className="button button-secondary"
+                onClick={handleCheckAvailability}
+                disabled={checkingAvailability || loadingAreas}
               >
                 {checkingAvailability
                   ? "Verificando..."
                   : "Verificar disponibilidad"}
               </button>
 
-              {availability?.available && (
-                <div
-                  style={
-                    styles.success
-                  }
-                >
-                  <strong>
-                    ✓ Java Coffee Cart disponible
-                  </strong>
-
-                  <div>
-                    {formatDate(
-                      eventDate
-                    )}
-                  </div>
-
-                  <div>
-                    {formatTime(
-                      startTime
-                    )}
-                  </div>
-                </div>
-              )}
-
               <button
-                onClick={
-                  calculateQuote
-                }
-                disabled={
-                  loadingQuote
-                }
-                style={
-                  styles.primaryButton
-                }
+                className="button button-primary"
+                onClick={handleCalculateQuote}
+                disabled={calculatingQuote || !availability?.available}
               >
-                {loadingQuote
-                  ? "Calculando..."
-                  : "Cotizar evento"}
+                {calculatingQuote ? "Cotizando..." : "Generar cotización"}
               </button>
-            </>
-          )}
+            </div>
 
-          {quote && (
-            <div style={styles.quote}>
-              <div style={styles.small}>
-                TU EVENTO JAVA
+            {availability?.available && (
+              <div className="status success">
+                <strong>Java Coffee Cart disponible.</strong>
+                <br />
+                {formatDateLong(form.eventDate)} · {formatTime12(form.startTime)} ·{" "}
+                {form.durationHours} horas
               </div>
+            )}
+          </div>
 
-              <h2>
-                {
-                  quote
-                    .serviceArea
-                    .city
-                }
-              </h2>
+          <div className="divider" />
 
+          <div className="form-section">
+            <div className="section-title">
               <div>
-                {formatDate(
-                  eventDate
-                )}
-              </div>
-
-              <div>
-                {formatTime(
-                  startTime
-                )}
-              </div>
-
-              <p>
-                {guests} invitados ·{" "}
-                {hours} horas
-              </p>
-
-              <div style={styles.muted}>
-                Total estimado
-              </div>
-
-              <div style={styles.total}>
-                {formatMoney(
-                  quote.quote.total
-                )}
-              </div>
-
-              <p>
-                Anticipo:{" "}
-                <strong>
-                  {formatMoney(
-                    quote.quote.deposit
-                  )}
-                </strong>
-              </p>
-
-              <div style={styles.muted}>
-                Saldo:{" "}
-                {formatMoney(
-                  quote.quote.balance
-                )}
+                <div className="section-kicker">Paso 2</div>
+                <h3>Datos del cliente</h3>
               </div>
             </div>
-          )}
 
-          {availability?.available &&
-            quote &&
-            !hold && (
-              <div
-                style={
-                  styles.customer
-                }
-              >
-                <h2>
-                  Aparta tu fecha
-                </h2>
-
-                <FieldLabel>
-                  Nombre completo
-                </FieldLabel>
-
+            <div className="form-grid">
+              <div className="field full">
+                <label className="label">Nombre completo</label>
                 <input
-                  value={
-                    customerName
-                  }
-                  onChange={(e) =>
-                    setCustomerName(
-                      e.target.value
-                    )
-                  }
-                  style={styles.input}
+                  className="input"
+                  type="text"
+                  value={form.customerName}
+                  onChange={(e) => updateField("customerName", e.target.value)}
+                  placeholder="Nombre del cliente o empresa"
                 />
+              </div>
 
-                <FieldLabel>
-                  Correo electrónico
-                </FieldLabel>
-
+              <div className="field">
+                <label className="label">Correo electrónico</label>
                 <input
+                  className="input"
                   type="email"
-                  value={email}
-                  onChange={(e) =>
-                    setEmail(
-                      e.target.value
-                    )
-                  }
-                  style={styles.input}
+                  value={form.email}
+                  onChange={(e) => updateField("email", e.target.value)}
+                  placeholder="correo@ejemplo.com"
                 />
+              </div>
 
-                <FieldLabel>
-                  WhatsApp
-                </FieldLabel>
-
-                <div
-                  style={
-                    styles.phoneRow
-                  }
-                >
-                  <div
-                    style={
-                      styles.countryCode
-                    }
-                  >
-                    🇲🇽 +52
-                  </div>
-
-                  <input
-                    type="tel"
-                    inputMode="numeric"
-                    placeholder="871 123 4567"
-                    value={phone}
-                    onChange={(e) => {
-                      const formatted =
-                        formatMexicoPhoneInput(
-                          e.target.value
-                        );
-
-                      setPhone(
-                        formatted
-                      );
-
-                      if (
-                        !formatted ||
-                        isValidMexicoPhone(
-                          formatted
-                        )
-                      ) {
-                        setPhoneError(
-                          ""
-                        );
-                      }
-                    }}
-                    onBlur={() => {
-                      if (
-                        phone &&
-                        !isValidMexicoPhone(
-                          phone
-                        )
-                      ) {
-                        setPhoneError(
-                          "Ingresa los 10 dígitos de tu celular."
-                        );
-                      }
-                    }}
-                    style={
-                      styles.phoneInput
-                    }
-                  />
-                </div>
-
-                {phoneError && (
-                  <div
-                    style={
-                      styles.fieldError
-                    }
-                  >
-                    {phoneError}
-                  </div>
-                )}
-
-                <div
-                  style={
-                    styles.help
-                  }
-                >
-                  Lo guardaremos como
-                  +52 y tu número de 10 dígitos.
-                </div>
-
-                <FieldLabel>
-                  Tipo de evento
-                </FieldLabel>
-
-                <select
-                  value={eventType}
-                  onChange={(e) =>
-                    setEventType(
-                      e.target.value
-                    )
-                  }
-                  style={styles.input}
-                >
-                  <option value="">
-                    Selecciona
-                  </option>
-
-                  <option value="Corporativo">
-                    Corporativo
-                  </option>
-
-                  <option value="Boda">
-                    Boda
-                  </option>
-
-                  <option value="Cumpleaños">
-                    Cumpleaños
-                  </option>
-
-                  <option value="Universidad">
-                    Universidad
-                  </option>
-
-                  <option value="Expo">
-                    Expo
-                  </option>
-
-                  <option value="Evento privado">
-                    Evento privado
-                  </option>
-
-                  <option value="Otro">
-                    Otro
-                  </option>
-                </select>
-
-                <FieldLabel>
-                  Dirección del evento
-                </FieldLabel>
-
+              <div className="field">
+                <label className="label">Teléfono</label>
                 <input
-                  value={
-                    eventAddress
-                  }
-                  placeholder="Calle, número, colonia..."
-                  onChange={(e) =>
-                    setEventAddress(
-                      e.target.value
-                    )
-                  }
-                  style={styles.input}
+                  className="input"
+                  type="tel"
+                  value={form.phone}
+                  onChange={(e) => updateField("phone", e.target.value)}
+                  placeholder="8711234567"
                 />
+              </div>
 
-                <button
-                  onClick={
-                    createHold
-                  }
-                  disabled={
-                    creatingHold ||
-                    !isValidMexicoPhone(
-                      phone
-                    )
-                  }
-                  style={{
-                    ...styles.reserveButton,
+              <div className="field">
+                <label className="label">Tipo de evento</label>
+                <input
+                  className="input"
+                  type="text"
+                  value={form.eventType}
+                  onChange={(e) => updateField("eventType", e.target.value)}
+                  placeholder="Corporativo, boda, inauguración, etc."
+                />
+              </div>
 
-                    opacity:
-                      isValidMexicoPhone(
-                        phone
-                      )
-                        ? 1
-                        : 0.55,
-                  }}
-                >
-                  {creatingHold
-                    ? "Apartando..."
-                    : "Apartar fecha 15 minutos"}
-                </button>
+              <div className="field">
+                <label className="label">Dirección del evento</label>
+                <input
+                  className="input"
+                  type="text"
+                  value={form.eventAddress}
+                  onChange={(e) => updateField("eventAddress", e.target.value)}
+                  placeholder="Dirección completa del evento"
+                />
+              </div>
+
+              <div className="field full">
+                <label className="label">Notas adicionales</label>
+                <textarea
+                  className="textarea"
+                  value={form.notes}
+                  onChange={(e) => updateField("notes", e.target.value)}
+                  placeholder="Indicaciones especiales, acceso, montaje, observaciones..."
+                />
+              </div>
+            </div>
+
+            {quote?.quote && (
+              <div className="quote-card">
+                <div className="quote-top">
+                  <div>
+                    <div className="quote-money-label">Tu evento Java</div>
+                    <div className="quote-place">
+                      {selectedArea?.city || quote?.serviceArea?.city || "Evento"}
+                    </div>
+                    <div className="quote-meta">
+                      {formatDateLong(form.eventDate)} · {formatTime12(form.startTime)}
+                      <br />
+                      {form.guests} invitados · {form.durationHours} horas
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="quote-money-label">Total estimado</div>
+                    <div className="quote-money">
+                      {formatMoney(quote.quote.total)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="quote-breakdown">
+                  <div className="mini-stat">
+                    <div className="mini-stat-label">Anticipo para reservar</div>
+                    <div className="mini-stat-value">
+                      {formatMoney(quote.quote.deposit)}
+                    </div>
+                  </div>
+
+                  <div className="mini-stat">
+                    <div className="mini-stat-label">Saldo restante</div>
+                    <div className="mini-stat-value">
+                      {formatMoney(quote.quote.balance)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="note">
+                  Esta cotización utiliza actualmente precios de prueba mientras
+                  configuramos el tarifario definitivo de Java Coffee Cart.
+                </div>
               </div>
             )}
 
-          {hold && (
-            <div style={styles.hold}>
-              <h2>
-                ✓ Fecha apartada
-              </h2>
+            <div className="action-row">
+              <button
+                className="button button-primary"
+                onClick={handleCreateHold}
+                disabled={creatingHold || !quote?.quote}
+              >
+                {creatingHold ? "Apartando..." : "Apartar fecha"}
+              </button>
+            </div>
 
-              {secondsRemaining >
-              0 ? (
-                <>
-                  <div style={styles.timer}>
-                    {formatCountdown(
-                      secondsRemaining
-                    )}
-                  </div>
+            {hold?.bookingId && (
+              <div className="hold-card">
+                <div className="section-kicker">Paso 3</div>
+                <h3 style={{ marginTop: 6, marginBottom: 10 }}>
+                  Fecha apartada temporalmente
+                </h3>
 
-                  <p style={styles.muted}>
-                    Tiempo restante para iniciar el pago.
-                  </p>
+                <div className="caption">
+                  Tu Java Coffee Cart quedó reservado temporalmente mientras completas el pago.
+                </div>
 
+                <div className="countdown">
+                  {formatCountdown(remainingSeconds)}
+                </div>
+
+                <div className="caption">
+                  Tiempo restante para iniciar el pago.
+                </div>
+
+                <div className="note">
+                  Booking ID: <strong>{hold.bookingId}</strong>
+                </div>
+
+                <div className="action-row">
                   <button
-                    onClick={
-                      continueToPayment
-                    }
-                    disabled={
-                      creatingCheckout
-                    }
-                    style={
-                      styles.paymentButton
-                    }
+                    className="button button-primary"
+                    onClick={handleCheckout}
+                    disabled={startingCheckout || remainingSeconds === 0}
                   >
-                    {creatingCheckout
-                      ? "Preparando Shopify..."
+                    {startingCheckout
+                      ? "Abriendo checkout..."
                       : "Continuar al pago"}
                   </button>
-
-                  <div style={styles.help}>
-                    El cliente y su teléfono quedarán asociados en Shopify.
-                  </div>
-                </>
-              ) : (
-                <div style={styles.error}>
-                  El tiempo de apartado terminó.
                 </div>
-              )}
-            </div>
-          )}
 
-          {error && (
-            <div style={styles.error}>
-              {error}
+                <div className="note">
+                  El cliente y su teléfono quedarán asociados en Shopify.
+                </div>
+              </div>
+            )}
+
+            {error && <div className="status error">{error}</div>}
+            {success && <div className="status success">{success}</div>}
+          </div>
+        </section>
+
+        <aside className="panel summary-card">
+          <div className="summary-top">
+            <h3 className="summary-title">Resumen del evento</h3>
+            <div className="summary-text">
+              Un panel limpio para ver todo más claro mientras avanzas en el flujo.
             </div>
-          )}
-        </div>
+          </div>
+
+          <div className="summary-block">
+            <div className="summary-row">
+              <span>Ciudad</span>
+              <strong>
+                {selectedArea
+                  ? `${selectedArea.city}, ${selectedArea.state}`
+                  : "—"}
+              </strong>
+            </div>
+
+            <div className="summary-row">
+              <span>Fecha</span>
+              <strong>
+                {form.eventDate ? formatDateShort(form.eventDate) : "—"}
+              </strong>
+            </div>
+
+            <div className="summary-row">
+              <span>Hora</span>
+              <strong>{form.startTime ? formatTime12(form.startTime) : "—"}</strong>
+            </div>
+
+            <div className="summary-row">
+              <span>Invitados</span>
+              <strong>{form.guests || "—"}</strong>
+            </div>
+
+            <div className="summary-row">
+              <span>Duración</span>
+              <strong>{form.durationHours || "—"} horas</strong>
+            </div>
+          </div>
+
+          <div className="summary-block">
+            <div className="summary-row">
+              <span>Total estimado</span>
+              <strong>
+                {quote?.quote ? formatMoney(quote.quote.total) : "—"}
+              </strong>
+            </div>
+
+            <div className="summary-row">
+              <span>Anticipo</span>
+              <strong>
+                {quote?.quote ? formatMoney(quote.quote.deposit) : "—"}
+              </strong>
+            </div>
+
+            <div className="summary-row">
+              <span>Saldo</span>
+              <strong>
+                {quote?.quote ? formatMoney(quote.quote.balance) : "—"}
+              </strong>
+            </div>
+
+            {quote?.quote && (
+              <div className="summary-big">
+                {formatMoney(quote.quote.total)}
+              </div>
+            )}
+          </div>
+
+          <div className="summary-block">
+            <div className="section-kicker">Esencia Java</div>
+
+            <div className="chips">
+              <div className="chip">Origen</div>
+              <div className="chip">Selección</div>
+              <div className="chip">Tueste</div>
+              <div className="chip">Empaque</div>
+              <div className="chip">Entrega</div>
+            </div>
+
+            <div className="brand-quote">
+              Una experiencia de café pensada con calidez, mejor presentación y
+              un flujo de reserva más claro.
+            </div>
+          </div>
+
+          <div className="summary-block tiny">
+            Este nuevo diseño está pensado para verse mucho más premium y al mismo
+            tiempo convertir mejor: menos ruido, mejor jerarquía y un checkout
+            más entendible.
+          </div>
+        </aside>
       </div>
     </main>
   );
 }
 
-function FieldLabel({
-  children,
-}) {
-  return (
-    <label
-      style={{
-        display:
-          "block",
+function getActiveStep({ availability, quote, hold }) {
+  if (hold?.bookingId) return 4;
+  if (quote?.quote) return 3;
+  if (availability?.available) return 2;
+  return 1;
+}
 
-        fontWeight:
-          500,
-      }}
-    >
-      {children}
-    </label>
+function onlyDigits(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function isValidMxPhone(value) {
+  const digits = onlyDigits(value);
+
+  return (
+    digits.length === 10 ||
+    (digits.length === 12 && digits.startsWith("52")) ||
+    (digits.length === 13 && digits.startsWith("521"))
   );
 }
 
-const styles = {
-  main: {
-    minHeight:
-      "100vh",
-
-    background:
-      "#111",
-
-    color:
-      "#fff",
-
-    padding:
-      "50px 20px",
-
-    fontFamily:
-      "Arial, sans-serif",
-  },
-
-  container: {
-    maxWidth:
-      "700px",
-
-    margin:
-      "0 auto",
-  },
-
-  header: {
-    marginBottom:
-      "40px",
-  },
-
-  brand: {
-    fontSize:
-      "14px",
-
-    letterSpacing:
-      "2px",
-  },
-
-  title: {
-    fontSize:
-      "42px",
-
-    marginBottom:
-      "8px",
-  },
-
-  subtitle: {
-    color:
-      "#bbb",
-
-    fontSize:
-      "18px",
-  },
-
-  card: {
-    background:
-      "#1c1c1c",
-
-    padding:
-      "30px",
-
-    borderRadius:
-      "16px",
-  },
-
-  input: {
-    width:
-      "100%",
-
-    boxSizing:
-      "border-box",
-
-    padding:
-      "14px",
-
-    marginTop:
-      "8px",
-
-    marginBottom:
-      "22px",
-
-    background:
-      "#292929",
-
-    color:
-      "#fff",
-
-    border:
-      "1px solid #444",
-
-    borderRadius:
-      "8px",
-
-    fontSize:
-      "16px",
-  },
-
-  extras: {
-    display:
-      "grid",
-
-    gap:
-      "14px",
-
-    marginBottom:
-      "25px",
-  },
-
-  secondaryButton: {
-    width:
-      "100%",
-
-    padding:
-      "16px",
-
-    background:
-      "#252525",
-
-    color:
-      "#fff",
-
-    border:
-      "1px solid #666",
-
-    borderRadius:
-      "9px",
-
-    fontWeight:
-      "bold",
-
-    cursor:
-      "pointer",
-
-    marginBottom:
-      "15px",
-  },
-
-  primaryButton: {
-    width:
-      "100%",
-
-    padding:
-      "17px",
-
-    background:
-      "#888",
-
-    color:
-      "#fff",
-
-    border:
-      0,
-
-    borderRadius:
-      "9px",
-
-    fontSize:
-      "17px",
-
-    fontWeight:
-      "bold",
-
-    cursor:
-      "pointer",
-  },
-
-  success: {
-    padding:
-      "16px",
-
-    marginBottom:
-      "18px",
-
-    background:
-      "#123f23",
-
-    border:
-      "1px solid #24743c",
-
-    borderRadius:
-      "8px",
-
-    lineHeight:
-      1.6,
-  },
-
-  quote: {
-    marginTop:
-      "30px",
-
-    paddingTop:
-      "30px",
-
-    borderTop:
-      "1px solid #444",
-  },
-
-  small: {
-    color:
-      "#aaa",
-
-    fontSize:
-      "13px",
-
-    letterSpacing:
-      "1.5px",
-  },
-
-  total: {
-    fontSize:
-      "38px",
-
-    fontWeight:
-      "bold",
-
-    marginTop:
-      "5px",
-  },
-
-  muted: {
-    color:
-      "#aaa",
-  },
-
-  customer: {
-    marginTop:
-      "35px",
-
-    paddingTop:
-      "30px",
-
-    borderTop:
-      "1px solid #444",
-  },
-
-  phoneRow: {
-    display:
-      "flex",
-
-    marginTop:
-      "8px",
-
-    marginBottom:
-      "6px",
-  },
-
-  countryCode: {
-    display:
-      "flex",
-
-    alignItems:
-      "center",
-
-    padding:
-      "0 14px",
-
-    background:
-      "#222",
-
-    border:
-      "1px solid #444",
-
-    borderRight:
-      0,
-
-    borderRadius:
-      "8px 0 0 8px",
-
-    whiteSpace:
-      "nowrap",
-  },
-
-  phoneInput: {
-    flex:
-      1,
-
-    minWidth:
-      0,
-
-    padding:
-      "14px",
-
-    background:
-      "#292929",
-
-    color:
-      "#fff",
-
-    border:
-      "1px solid #444",
-
-    borderRadius:
-      "0 8px 8px 0",
-
-    fontSize:
-      "16px",
-
-    boxSizing:
-      "border-box",
-  },
-
-  fieldError: {
-    color:
-      "#ff9999",
-
-    fontSize:
-      "14px",
-
-    marginBottom:
-      "6px",
-  },
-
-  help: {
-    color:
-      "#999",
-
-    fontSize:
-      "13px",
-
-    lineHeight:
-      1.5,
-
-    marginBottom:
-      "20px",
-  },
-
-  reserveButton: {
-    width:
-      "100%",
-
-    padding:
-      "18px",
-
-    background:
-      "#fff",
-
-    color:
-      "#111",
-
-    border:
-      0,
-
-    borderRadius:
-      "9px",
-
-    fontSize:
-      "17px",
-
-    fontWeight:
-      "bold",
-
-    cursor:
-      "pointer",
-  },
-
-  hold: {
-    marginTop:
-      "30px",
-
-    padding:
-      "25px",
-
-    textAlign:
-      "center",
-
-    background:
-      "#172a1c",
-
-    border:
-      "1px solid #296b3a",
-
-    borderRadius:
-      "12px",
-  },
-
-  timer: {
-    fontSize:
-      "48px",
-
-    fontWeight:
-      "bold",
-
-    margin:
-      "20px 0",
-  },
-
-  paymentButton: {
-    width:
-      "100%",
-
-    padding:
-      "18px",
-
-    background:
-      "#fff",
-
-    color:
-      "#111",
-
-    border:
-      0,
-
-    borderRadius:
-      "9px",
-
-    fontSize:
-      "18px",
-
-    fontWeight:
-      "bold",
-
-    cursor:
-      "pointer",
-
-    marginTop:
-      "20px",
-
-    marginBottom:
-      "15px",
-  },
-
-  error: {
-    marginTop:
-      "20px",
-
-    padding:
-      "15px",
-
-    background:
-      "#381818",
-
-    border:
-      "1px solid #682727",
-
-    borderRadius:
-      "8px",
-  },
-};
+function formatMoney(amount) {
+  return new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+  }).format(Number(amount || 0));
+}
+
+function formatDateLong(value) {
+  if (!value) return "—";
+
+  return new Intl.DateTimeFormat("es-MX", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${value}T00:00:00`));
+}
+
+function formatDateShort(value) {
+  if (!value) return "—";
+
+  return new Intl.DateTimeFormat("es-MX", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(`${value}T00:00:00`));
+}
+
+function formatTime12(value) {
+  if (!value) return "—";
+
+  const [h, m] = value.split(":");
+  const date = new Date();
+  date.setHours(Number(h), Number(m), 0, 0);
+
+  return new Intl.DateTimeFormat("es-MX", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatCountdown(totalSeconds) {
+  if (totalSeconds === null || totalSeconds === undefined) return "15:00";
+  if (totalSeconds <= 0) return "00:00";
+
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
