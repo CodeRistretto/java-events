@@ -1,36 +1,139 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
 
 export default function Home() {
   // ============================================
-  // ESTADOS
+  // EVENTO
   // ============================================
 
-  const [serviceAreas, setServiceAreas] = useState([]);
-  const [serviceAreaId, setServiceAreaId] = useState("");
+  const [
+    serviceAreas,
+    setServiceAreas,
+  ] = useState([]);
 
-  const [eventDate, setEventDate] = useState("");
-  const [startTime, setStartTime] = useState("");
+  const [
+    serviceAreaId,
+    setServiceAreaId,
+  ] = useState("");
 
-  const [guests, setGuests] = useState(50);
-  const [hours, setHours] = useState(2);
+  const [
+    eventDate,
+    setEventDate,
+  ] = useState("");
 
-  const [matchaBar, setMatchaBar] = useState(false);
-  const [extraBarista, setExtraBarista] = useState(false);
+  const [
+    startTime,
+    setStartTime,
+  ] = useState("");
 
-  const [quote, setQuote] = useState(null);
-  const [availability, setAvailability] = useState(null);
+  const [
+    guests,
+    setGuests,
+  ] = useState(50);
 
-  const [loadingCities, setLoadingCities] = useState(true);
-  const [loadingQuote, setLoadingQuote] = useState(false);
-  const [checkingAvailability, setCheckingAvailability] =
-    useState(false);
+  const [
+    hours,
+    setHours,
+  ] = useState(2);
 
-  const [error, setError] = useState("");
+  const [
+    matchaBar,
+    setMatchaBar,
+  ] = useState(false);
+
+  const [
+    extraBarista,
+    setExtraBarista,
+  ] = useState(false);
 
   // ============================================
-  // CARGAR CIUDADES DESDE SUPABASE
+  // CLIENTE
+  // ============================================
+
+  const [
+    customerName,
+    setCustomerName,
+  ] = useState("");
+
+  const [
+    email,
+    setEmail,
+  ] = useState("");
+
+  const [
+    phone,
+    setPhone,
+  ] = useState("");
+
+  const [
+    eventType,
+    setEventType,
+  ] = useState("");
+
+  const [
+    eventAddress,
+    setEventAddress,
+  ] = useState("");
+
+  // ============================================
+  // RESULTADOS
+  // ============================================
+
+  const [
+    quote,
+    setQuote,
+  ] = useState(null);
+
+  const [
+    availability,
+    setAvailability,
+  ] = useState(null);
+
+  const [
+    hold,
+    setHold,
+  ] = useState(null);
+
+  const [
+    secondsRemaining,
+    setSecondsRemaining,
+  ] = useState(0);
+
+  // ============================================
+  // LOADING
+  // ============================================
+
+  const [
+    loadingCities,
+    setLoadingCities,
+  ] = useState(true);
+
+  const [
+    loadingQuote,
+    setLoadingQuote,
+  ] = useState(false);
+
+  const [
+    checkingAvailability,
+    setCheckingAvailability,
+  ] = useState(false);
+
+  const [
+    creatingHold,
+    setCreatingHold,
+  ] = useState(false);
+
+  const [
+    error,
+    setError,
+  ] = useState("");
+
+  // ============================================
+  // CARGAR CIUDADES
   // ============================================
 
   useEffect(() => {
@@ -39,57 +142,63 @@ export default function Home() {
         setLoadingCities(true);
         setError("");
 
-        const response = await fetch("/api/service-areas", {
-          cache: "no-store",
-        });
+        const response =
+          await fetch(
+            "/api/service-areas",
+            {
+              cache: "no-store",
+            }
+          );
 
-        const text = await response.text();
+        const text =
+          await response.text();
 
         if (!text) {
           throw new Error(
-            "El servidor no devolvió información de las ciudades."
+            "El servidor no devolvió ciudades."
           );
         }
 
-        let data;
+        const data =
+          JSON.parse(text);
 
-        try {
-          data = JSON.parse(text);
-        } catch {
-          throw new Error(
-            "La respuesta de ciudades no tiene un formato válido."
-          );
-        }
-
-        if (!response.ok || !data.success) {
+        if (
+          !response.ok ||
+          !data.success
+        ) {
           throw new Error(
             data.error ||
-              "No fue posible cargar las ciudades disponibles."
+              "No fue posible cargar las ciudades."
           );
         }
 
-        const areas = data.serviceAreas || [];
+        const areas =
+          data.serviceAreas || [];
 
-        setServiceAreas(areas);
+        setServiceAreas(
+          areas
+        );
 
-        if (areas.length > 0) {
-          setServiceAreaId(areas[0].id);
-        } else {
-          setServiceAreaId("");
-
-          setError(
-            "Actualmente no hay ciudades disponibles para Java Coffee Cart."
+        if (
+          areas.length > 0
+        ) {
+          setServiceAreaId(
+            areas[0].id
           );
         }
       } catch (err) {
-        console.error("Service areas error:", err);
+        console.error(
+          "Service areas:",
+          err
+        );
 
         setError(
-          err.message ||
-            "No fue posible cargar las ciudades."
+          err.message
         );
       } finally {
-        setLoadingCities(false);
+        setLoadingCities(
+          false
+        );
       }
     }
 
@@ -97,372 +206,775 @@ export default function Home() {
   }, []);
 
   // ============================================
-  // OBTENER ID DE CIUDAD
+  // CUENTA REGRESIVA HOLD
   // ============================================
 
-  function getSelectedServiceAreaId() {
-    return serviceAreaId || serviceAreas[0]?.id || "";
-  }
-
-  // ============================================
-  // RESETEAR RESULTADOS CUANDO CAMBIA EL EVENTO
-  // ============================================
-
-  function resetEventResults() {
-    setAvailability(null);
-    setQuote(null);
-    setError("");
-  }
-
-  // ============================================
-  // VERIFICAR DISPONIBILIDAD
-  // ============================================
-
-  async function checkAvailability() {
-    try {
-      setCheckingAvailability(true);
-      setError("");
-      setAvailability(null);
-
-      const selectedServiceAreaId =
-        getSelectedServiceAreaId();
-
-      if (!selectedServiceAreaId) {
-        throw new Error(
-          "Selecciona una ciudad para continuar."
-        );
-      }
-
-      if (!eventDate) {
-        throw new Error(
-          "Selecciona la fecha del evento."
-        );
-      }
-
-      if (!startTime) {
-        throw new Error(
-          "Selecciona la hora de inicio."
-        );
-      }
-
-      const numberHours = Number(hours);
-
-      if (!numberHours || numberHours < 1) {
-        throw new Error(
-          "Selecciona una duración válida."
-        );
-      }
-
-      const response = await fetch(
-        "/api/availability",
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type": "application/json",
-          },
-
-          body: JSON.stringify({
-            serviceAreaId:
-              selectedServiceAreaId,
-
-            eventDate,
-            startTime,
-
-            hours: numberHours,
-          }),
-        }
-      );
-
-      const text = await response.text();
-
-      if (!text) {
-        throw new Error(
-          "El servidor no devolvió información de disponibilidad."
-        );
-      }
-
-      let data;
-
-      try {
-        data = JSON.parse(text);
-      } catch {
-        console.error(
-          "Availability response:",
-          text
-        );
-
-        throw new Error(
-          "La respuesta de disponibilidad no es válida."
-        );
-      }
-
-      if (!response.ok || !data.success) {
-        throw new Error(
-          data.error ||
-            "No fue posible verificar la disponibilidad."
-        );
-      }
-
-      setAvailability(data);
-
-      if (!data.available) {
-        setError(
-          data.message ||
-            "No hay Java Coffee Cart disponible en ese horario."
-        );
-      }
-    } catch (err) {
-      console.error("Availability error:", err);
-
-      setError(
-        err.message ||
-          "No fue posible verificar la disponibilidad."
-      );
-    } finally {
-      setCheckingAvailability(false);
+  useEffect(() => {
+    if (
+      !hold?.expiresAt
+    ) {
+      return;
     }
-  }
 
-  // ============================================
-  // CALCULAR COTIZACIÓN
-  // ============================================
+    function updateTimer() {
+      const expiration =
+        new Date(
+          hold.expiresAt
+        ).getTime();
 
-  async function calculateQuote() {
-    try {
-      setLoadingQuote(true);
-      setError("");
-      setQuote(null);
+      const now =
+        Date.now();
 
-      const selectedServiceAreaId =
-        getSelectedServiceAreaId();
-
-      if (!selectedServiceAreaId) {
-        throw new Error(
-          "Selecciona una ciudad para continuar."
+      const seconds =
+        Math.max(
+          0,
+          Math.floor(
+            (expiration -
+              now) /
+              1000
+          )
         );
-      }
 
-      const numberGuests = Number(guests);
-      const numberHours = Number(hours);
-
-      if (!numberGuests || numberGuests < 1) {
-        throw new Error(
-          "Ingresa un número válido de invitados."
-        );
-      }
-
-      if (!numberHours || numberHours < 1) {
-        throw new Error(
-          "Selecciona una duración válida."
-        );
-      }
-
-      const response = await fetch("/api/quote", {
-        method: "POST",
-
-        headers: {
-          "Content-Type": "application/json",
-        },
-
-        body: JSON.stringify({
-          serviceAreaId:
-            selectedServiceAreaId,
-
-          guests: numberGuests,
-
-          hours: numberHours,
-
-          matchaBar,
-          extraBarista,
-        }),
-      });
-
-      const text = await response.text();
-
-      if (!text) {
-        throw new Error(
-          "El servidor no devolvió una cotización."
-        );
-      }
-
-      let data;
-
-      try {
-        data = JSON.parse(text);
-      } catch {
-        console.error("Quote response:", text);
-
-        throw new Error(
-          "La respuesta de cotización no es válida."
-        );
-      }
-
-      if (!response.ok || !data.success) {
-        throw new Error(
-          data.error ||
-            "No fue posible calcular la cotización."
-        );
-      }
-
-      setQuote(data);
-    } catch (err) {
-      console.error("Quote error:", err);
-
-      setError(
-        err.message ||
-          "Ocurrió un error al calcular la cotización."
+      setSecondsRemaining(
+        seconds
       );
-    } finally {
-      setLoadingQuote(false);
     }
+
+    updateTimer();
+
+    const interval =
+      setInterval(
+        updateTimer,
+        1000
+      );
+
+    return () =>
+      clearInterval(
+        interval
+      );
+  }, [hold]);
+
+  // ============================================
+  // HELPERS
+  // ============================================
+
+  function getServiceAreaId() {
+    return (
+      serviceAreaId ||
+      serviceAreas[0]?.id ||
+      ""
+    );
   }
 
-  // ============================================
-  // FORMATO DE DINERO
-  // ============================================
+  function resetResults() {
+    if (hold) {
+      return;
+    }
 
-  function formatMoney(amount) {
-    return new Intl.NumberFormat("es-MX", {
-      style: "currency",
-      currency: "MXN",
-    }).format(amount);
+    setAvailability(
+      null
+    );
+
+    setQuote(
+      null
+    );
+
+    setError(
+      ""
+    );
   }
 
-  // ============================================
-  // FORMATO DE FECHA
-  // ============================================
+  function formatMoney(
+    amount
+  ) {
+    return new Intl.NumberFormat(
+      "es-MX",
+      {
+        style:
+          "currency",
 
-  function formatDate(date) {
+        currency:
+          "MXN",
+      }
+    ).format(
+      amount
+    );
+  }
+
+  function formatDate(
+    date
+  ) {
     if (!date) {
       return "";
     }
 
-    const [year, month, day] =
-      date.split("-").map(Number);
-
-    const localDate = new Date(
+    const [
       year,
-      month - 1,
-      day
+      month,
+      day,
+    ] =
+      date
+        .split("-")
+        .map(Number);
+
+    const localDate =
+      new Date(
+        year,
+        month - 1,
+        day
+      );
+
+    return new Intl.DateTimeFormat(
+      "es-MX",
+      {
+        day:
+          "numeric",
+
+        month:
+          "long",
+
+        year:
+          "numeric",
+      }
+    ).format(
+      localDate
+    );
+  }
+
+  function formatTime(
+    time
+  ) {
+    if (!time) {
+      return "";
+    }
+
+    const [
+      hour,
+      minute,
+    ] =
+      time
+        .slice(0, 5)
+        .split(":")
+        .map(Number);
+
+    const date =
+      new Date();
+
+    date.setHours(
+      hour,
+      minute,
+      0,
+      0
     );
 
-    return new Intl.DateTimeFormat("es-MX", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    }).format(localDate);
+    return new Intl.DateTimeFormat(
+      "es-MX",
+      {
+        hour:
+          "numeric",
+
+        minute:
+          "2-digit",
+
+        hour12:
+          true,
+      }
+    ).format(
+      date
+    );
+  }
+
+  function formatCountdown(
+    seconds
+  ) {
+    const minutes =
+      Math.floor(
+        seconds / 60
+      );
+
+    const remainingSeconds =
+      seconds % 60;
+
+    return `${String(
+      minutes
+    ).padStart(
+      2,
+      "0"
+    )}:${String(
+      remainingSeconds
+    ).padStart(
+      2,
+      "0"
+    )}`;
   }
 
   // ============================================
-  // PANTALLA
+  // DISPONIBILIDAD
+  // ============================================
+
+  async function checkAvailability() {
+    try {
+      setCheckingAvailability(
+        true
+      );
+
+      setError(
+        ""
+      );
+
+      setAvailability(
+        null
+      );
+
+      const selectedServiceAreaId =
+        getServiceAreaId();
+
+      if (
+        !selectedServiceAreaId
+      ) {
+        throw new Error(
+          "Selecciona una ciudad."
+        );
+      }
+
+      if (
+        !eventDate
+      ) {
+        throw new Error(
+          "Selecciona la fecha."
+        );
+      }
+
+      if (
+        !startTime
+      ) {
+        throw new Error(
+          "Selecciona la hora."
+        );
+      }
+
+      const response =
+        await fetch(
+          "/api/availability",
+          {
+            method:
+              "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify(
+                {
+                  serviceAreaId:
+                    selectedServiceAreaId,
+
+                  eventDate,
+
+                  startTime,
+
+                  hours:
+                    Number(
+                      hours
+                    ),
+                }
+              ),
+          }
+        );
+
+      const text =
+        await response.text();
+
+      if (!text) {
+        throw new Error(
+          "No se recibió respuesta de disponibilidad."
+        );
+      }
+
+      const data =
+        JSON.parse(text);
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
+        throw new Error(
+          data.error ||
+            "No fue posible verificar disponibilidad."
+        );
+      }
+
+      setAvailability(
+        data
+      );
+
+      if (
+        !data.available
+      ) {
+        setError(
+          data.message ||
+            "No hay disponibilidad."
+        );
+      }
+    } catch (err) {
+      console.error(
+        "Availability:",
+        err
+      );
+
+      setError(
+        err.message
+      );
+    } finally {
+      setCheckingAvailability(
+        false
+      );
+    }
+  }
+
+  // ============================================
+  // COTIZAR
+  // ============================================
+
+  async function calculateQuote() {
+    try {
+      setLoadingQuote(
+        true
+      );
+
+      setError(
+        ""
+      );
+
+      setQuote(
+        null
+      );
+
+      const selectedServiceAreaId =
+        getServiceAreaId();
+
+      if (
+        !selectedServiceAreaId
+      ) {
+        throw new Error(
+          "Selecciona una ciudad."
+        );
+      }
+
+      const response =
+        await fetch(
+          "/api/quote",
+          {
+            method:
+              "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify(
+                {
+                  serviceAreaId:
+                    selectedServiceAreaId,
+
+                  guests:
+                    Number(
+                      guests
+                    ),
+
+                  hours:
+                    Number(
+                      hours
+                    ),
+
+                  matchaBar,
+
+                  extraBarista,
+                }
+              ),
+          }
+        );
+
+      const text =
+        await response.text();
+
+      if (!text) {
+        throw new Error(
+          "No se recibió cotización."
+        );
+      }
+
+      const data =
+        JSON.parse(text);
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
+        throw new Error(
+          data.error ||
+            "No fue posible cotizar."
+        );
+      }
+
+      setQuote(
+        data
+      );
+    } catch (err) {
+      console.error(
+        "Quote:",
+        err
+      );
+
+      setError(
+        err.message
+      );
+    } finally {
+      setLoadingQuote(
+        false
+      );
+    }
+  }
+
+  // ============================================
+  // CREAR HOLD
+  // ============================================
+
+  async function createHold() {
+    try {
+      setCreatingHold(
+        true
+      );
+
+      setError(
+        ""
+      );
+
+      if (
+        !availability?.available
+      ) {
+        throw new Error(
+          "Primero verifica la disponibilidad."
+        );
+      }
+
+      if (!quote) {
+        throw new Error(
+          "Primero genera la cotización."
+        );
+      }
+
+      if (
+        !customerName.trim()
+      ) {
+        throw new Error(
+          "Escribe tu nombre."
+        );
+      }
+
+      if (
+        !email.trim()
+      ) {
+        throw new Error(
+          "Escribe tu correo electrónico."
+        );
+      }
+
+      if (
+        !phone.trim()
+      ) {
+        throw new Error(
+          "Escribe tu número de WhatsApp."
+        );
+      }
+
+      const response =
+        await fetch(
+          "/api/hold",
+          {
+            method:
+              "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify(
+                {
+                  serviceAreaId:
+                    getServiceAreaId(),
+
+                  eventDate,
+
+                  startTime,
+
+                  guests:
+                    Number(
+                      guests
+                    ),
+
+                  hours:
+                    Number(
+                      hours
+                    ),
+
+                  matchaBar,
+
+                  extraBarista,
+
+                  customerName,
+
+                  email,
+
+                  phone,
+
+                  eventType,
+
+                  eventAddress,
+                }
+              ),
+          }
+        );
+
+      const text =
+        await response.text();
+
+      if (!text) {
+        throw new Error(
+          "No se recibió respuesta al apartar la fecha."
+        );
+      }
+
+      const data =
+        JSON.parse(text);
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
+        throw new Error(
+          data.error ||
+            "No fue posible apartar la fecha."
+        );
+      }
+
+      setHold(
+        data.hold
+      );
+
+      setQuote(
+        {
+          serviceArea:
+            data.serviceArea,
+
+          quote:
+            data.quote,
+        }
+      );
+    } catch (err) {
+      console.error(
+        "Hold:",
+        err
+      );
+
+      setError(
+        err.message
+      );
+    } finally {
+      setCreatingHold(
+        false
+      );
+    }
+  }
+
+  // ============================================
+  // UI
   // ============================================
 
   return (
-    <main style={mainStyle}>
-      <div style={containerStyle}>
-        {/* ======================================
-            HEADER
-        ====================================== */}
-
-        <div style={headerStyle}>
-          <div style={brandStyle}>
+    <main
+      style={
+        mainStyle
+      }
+    >
+      <div
+        style={
+          containerStyle
+        }
+      >
+        <div
+          style={
+            headerStyle
+          }
+        >
+          <div
+            style={
+              brandStyle
+            }
+          >
             JAVA TIMES CAFFÉ
           </div>
 
-          <h1 style={titleStyle}>
+          <h1
+            style={
+              titleStyle
+            }
+          >
             Java Coffee Cart
           </h1>
 
-          <p style={subtitleStyle}>
-            Cotiza y consulta la disponibilidad
-            de tu evento en segundos.
+          <p
+            style={
+              subtitleStyle
+            }
+          >
+            Cotiza, consulta disponibilidad
+            y aparta tu evento.
           </p>
         </div>
 
-        {/* ======================================
-            TARJETA
-        ====================================== */}
-
-        <div style={cardStyle}>
+        <div
+          style={
+            cardStyle
+          }
+        >
           {/* CIUDAD */}
 
-          <label style={labelStyle}>
+          <label
+            style={
+              labelStyle
+            }
+          >
             Ciudad del evento
           </label>
 
           <select
-            value={serviceAreaId}
-            disabled={loadingCities}
-            onChange={(e) => {
+            value={
+              serviceAreaId
+            }
+
+            disabled={
+              loadingCities ||
+              Boolean(hold)
+            }
+
+            onChange={(
+              e
+            ) => {
               setServiceAreaId(
                 e.target.value
               );
 
-              resetEventResults();
+              resetResults();
             }}
-            style={inputStyle}
+
+            style={
+              inputStyle
+            }
           >
             {loadingCities && (
               <option value="">
-                Cargando ciudades...
+                Cargando...
               </option>
             )}
 
-            {!loadingCities &&
-              serviceAreas.length === 0 && (
-                <option value="">
-                  No hay ciudades disponibles
-                </option>
-              )}
-
-            {!loadingCities &&
-              serviceAreas.map((area) => (
+            {serviceAreas.map(
+              (area) => (
                 <option
-                  key={area.id}
-                  value={area.id}
+                  key={
+                    area.id
+                  }
+
+                  value={
+                    area.id
+                  }
                 >
-                  {area.city},{" "}
-                  {area.state}
+                  {
+                    area.city
+                  }
+                  ,{" "}
+                  {
+                    area.state
+                  }
                 </option>
-              ))}
+              )
+            )}
           </select>
 
           {/* FECHA */}
 
-          <label style={labelStyle}>
+          <label
+            style={
+              labelStyle
+            }
+          >
             Fecha del evento
           </label>
 
           <input
             type="date"
-            value={eventDate}
-            onChange={(e) => {
+
+            value={
+              eventDate
+            }
+
+            disabled={
+              Boolean(hold)
+            }
+
+            onChange={(
+              e
+            ) => {
               setEventDate(
                 e.target.value
               );
 
-              resetEventResults();
+              resetResults();
             }}
-            style={inputStyle}
+
+            style={
+              inputStyle
+            }
           />
 
           {/* HORA */}
 
-          <label style={labelStyle}>
+          <label
+            style={
+              labelStyle
+            }
+          >
             Hora de inicio
           </label>
 
           <select
-            value={startTime}
-            onChange={(e) => {
+            value={
+              startTime
+            }
+
+            disabled={
+              Boolean(hold)
+            }
+
+            onChange={(
+              e
+            ) => {
               setStartTime(
                 e.target.value
               );
 
-              resetEventResults();
+              resetResults();
             }}
-            style={inputStyle}
+
+            style={
+              inputStyle
+            }
           >
             <option value="">
               Selecciona una hora
@@ -523,41 +1035,76 @@ export default function Home() {
 
           {/* INVITADOS */}
 
-          <label style={labelStyle}>
+          <label
+            style={
+              labelStyle
+            }
+          >
             Número de invitados
           </label>
 
           <input
             type="number"
+
             min="1"
-            value={guests}
-            onChange={(e) => {
+
+            value={
+              guests
+            }
+
+            disabled={
+              Boolean(hold)
+            }
+
+            onChange={(
+              e
+            ) => {
               setGuests(
                 e.target.value
               );
 
-              setQuote(null);
-              setError("");
+              setQuote(
+                null
+              );
             }}
-            style={inputStyle}
+
+            style={
+              inputStyle
+            }
           />
 
           {/* DURACIÓN */}
 
-          <label style={labelStyle}>
-            Duración del evento
+          <label
+            style={
+              labelStyle
+            }
+          >
+            Duración
           </label>
 
           <select
-            value={hours}
-            onChange={(e) => {
+            value={
+              hours
+            }
+
+            disabled={
+              Boolean(hold)
+            }
+
+            onChange={(
+              e
+            ) => {
               setHours(
                 e.target.value
               );
 
-              resetEventResults();
+              resetResults();
             }}
-            style={inputStyle}
+
+            style={
+              inputStyle
+            }
           >
             <option value="2">
               2 horas
@@ -578,35 +1125,69 @@ export default function Home() {
 
           {/* EXTRAS */}
 
-          <div style={extrasContainerStyle}>
-            <label style={checkboxLabelStyle}>
+          <div
+            style={
+              extrasStyle
+            }
+          >
+            <label
+              style={
+                checkboxStyle
+              }
+            >
               <input
                 type="checkbox"
-                checked={matchaBar}
-                onChange={(e) => {
+
+                checked={
+                  matchaBar
+                }
+
+                disabled={
+                  Boolean(hold)
+                }
+
+                onChange={(
+                  e
+                ) => {
                   setMatchaBar(
                     e.target.checked
                   );
 
-                  setQuote(null);
-                  setError("");
+                  setQuote(
+                    null
+                  );
                 }}
               />
 
-              Agregar Matcha Bar
+              Matcha Bar
             </label>
 
-            <label style={checkboxLabelStyle}>
+            <label
+              style={
+                checkboxStyle
+              }
+            >
               <input
                 type="checkbox"
-                checked={extraBarista}
-                onChange={(e) => {
+
+                checked={
+                  extraBarista
+                }
+
+                disabled={
+                  Boolean(hold)
+                }
+
+                onChange={(
+                  e
+                ) => {
                   setExtraBarista(
                     e.target.checked
                   );
 
-                  setQuote(null);
-                  setError("");
+                  setQuote(
+                    null
+                  );
                 }}
               />
 
@@ -614,171 +1195,471 @@ export default function Home() {
             </label>
           </div>
 
-          {/* ======================================
-              DISPONIBILIDAD
-          ====================================== */}
+          {/* DISPONIBILIDAD */}
 
-          <button
-            onClick={checkAvailability}
-            disabled={
-              checkingAvailability ||
-              loadingCities ||
-              serviceAreas.length === 0
-            }
-            style={secondaryButtonStyle}
-          >
-            {checkingAvailability
-              ? "Verificando disponibilidad..."
-              : "Verificar disponibilidad"}
-          </button>
+          {!hold && (
+            <button
+              onClick={
+                checkAvailability
+              }
 
-          {availability?.available && (
-            <div style={successBoxStyle}>
+              disabled={
+                checkingAvailability
+              }
+
+              style={
+                secondaryButtonStyle
+              }
+            >
+              {checkingAvailability
+                ? "Verificando..."
+                : "Verificar disponibilidad"}
+            </button>
+          )}
+
+          {availability?.available &&
+            !hold && (
               <div
-                style={{
-                  fontWeight: "bold",
-                  marginBottom: "6px",
-                }}
-              >
-                ✓ Java Coffee Cart disponible
-              </div>
-
-              <div>
-                {formatDate(
-                  availability.event.date
-                )}
-              </div>
-
-              <div>
-                Hora:{" "}
-                {
-                  availability.event
-                    .startTime
+                style={
+                  successBoxStyle
                 }
+              >
+                <strong>
+                  ✓ Java Coffee Cart disponible
+                </strong>
+
+                <div>
+                  {formatDate(
+                    availability
+                      .event
+                      .date
+                  )}
+                </div>
+
+                <div>
+                  {formatTime(
+                    availability
+                      .event
+                      .startTime
+                  )}
+                </div>
               </div>
+            )}
 
-              <div>
-                Duración:{" "}
-                {availability.event.hours}{" "}
-                horas
-              </div>
-            </div>
+          {/* COTIZACIÓN */}
+
+          {!hold && (
+            <button
+              onClick={
+                calculateQuote
+              }
+
+              disabled={
+                loadingQuote
+              }
+
+              style={
+                primaryButtonStyle
+              }
+            >
+              {loadingQuote
+                ? "Calculando..."
+                : "Cotizar evento"}
+            </button>
           )}
-
-          {/* ======================================
-              COTIZAR
-          ====================================== */}
-
-          <button
-            onClick={calculateQuote}
-            disabled={
-              loadingQuote ||
-              loadingCities ||
-              serviceAreas.length === 0
-            }
-            style={primaryButtonStyle}
-          >
-            {loadingQuote
-              ? "Calculando..."
-              : "Cotizar evento"}
-          </button>
-
-          {/* ======================================
-              ERROR
-          ====================================== */}
-
-          {error && (
-            <div style={errorBoxStyle}>
-              {error}
-            </div>
-          )}
-
-          {/* ======================================
-              RESULTADO COTIZACIÓN
-          ====================================== */}
 
           {quote && (
-            <div style={quoteContainerStyle}>
-              <div style={quoteLabelStyle}>
+            <div
+              style={
+                quoteStyle
+              }
+            >
+              <div
+                style={
+                  smallLabelStyle
+                }
+              >
                 TU EVENTO JAVA
               </div>
 
-              <h2 style={quoteTitleStyle}>
-                {quote.serviceArea.city}
+              <h2>
+                {
+                  quote
+                    .serviceArea
+                    .city
+                }
               </h2>
 
-              <div style={quoteStateStyle}>
-                {quote.serviceArea.state}
-              </div>
-
-              {eventDate && (
-                <div style={summaryRowStyle}>
-                  Fecha:{" "}
-                  <strong>
-                    {formatDate(eventDate)}
-                  </strong>
-                </div>
-              )}
-
-              {startTime && (
-                <div style={summaryRowStyle}>
-                  Hora:{" "}
-                  <strong>
-                    {startTime}
-                  </strong>
-                </div>
-              )}
-
-              <div style={summaryRowStyle}>
-                {guests} invitados ·{" "}
-                {hours} horas
-              </div>
-
-              {matchaBar && (
-                <div style={extraResultStyle}>
-                  ✓ Matcha Bar
-                </div>
-              )}
-
-              {extraBarista && (
-                <div style={extraResultStyle}>
-                  ✓ Barista adicional
-                </div>
-              )}
-
-              <div style={priceLabelStyle}>
-                Total estimado
-              </div>
-
-              <div style={priceStyle}>
-                {formatMoney(
-                  quote.quote.total
+              <div>
+                {formatDate(
+                  eventDate
                 )}
               </div>
 
-              <div style={depositStyle}>
-                Anticipo para reservar:{" "}
+              <div>
+                {formatTime(
+                  startTime
+                )}
+              </div>
+
+              <div
+                style={{
+                  marginTop:
+                    "15px",
+                }}
+              >
+                {guests} invitados
+                {" · "}
+                {hours} horas
+              </div>
+
+              <div
+                style={
+                  totalLabelStyle
+                }
+              >
+                Total estimado
+              </div>
+
+              <div
+                style={
+                  totalStyle
+                }
+              >
+                {formatMoney(
+                  quote
+                    .quote
+                    .total
+                )}
+              </div>
+
+              <div
+                style={{
+                  marginTop:
+                    "15px",
+                }}
+              >
+                Anticipo:{" "}
                 <strong>
                   {formatMoney(
-                    quote.quote.deposit
+                    quote
+                      .quote
+                      .deposit
                   )}
                 </strong>
               </div>
 
-              <div style={balanceStyle}>
-                Saldo restante:{" "}
+              <div
+                style={
+                  mutedStyle
+                }
+              >
+                Saldo:{" "}
                 {formatMoney(
-                  quote.quote.balance
+                  quote
+                    .quote
+                    .balance
                 )}
               </div>
+            </div>
+          )}
 
-              <div style={noticeStyle}>
-                Esta cotización utiliza
-                actualmente precios de prueba
-                mientras configuramos el
-                tarifario definitivo de Java
-                Coffee Cart.
+          {/* DATOS CLIENTE */}
+
+          {availability?.available &&
+            quote &&
+            !hold && (
+              <div
+                style={
+                  customerSectionStyle
+                }
+              >
+                <h2>
+                  Aparta tu fecha
+                </h2>
+
+                <p
+                  style={
+                    mutedStyle
+                  }
+                >
+                  Completa tus datos.
+                  Apartaremos este horario
+                  durante 15 minutos.
+                </p>
+
+                <label
+                  style={
+                    labelStyle
+                  }
+                >
+                  Nombre completo
+                </label>
+
+                <input
+                  value={
+                    customerName
+                  }
+
+                  onChange={(
+                    e
+                  ) =>
+                    setCustomerName(
+                      e.target.value
+                    )
+                  }
+
+                  style={
+                    inputStyle
+                  }
+                />
+
+                <label
+                  style={
+                    labelStyle
+                  }
+                >
+                  Correo electrónico
+                </label>
+
+                <input
+                  type="email"
+
+                  value={
+                    email
+                  }
+
+                  onChange={(
+                    e
+                  ) =>
+                    setEmail(
+                      e.target.value
+                    )
+                  }
+
+                  style={
+                    inputStyle
+                  }
+                />
+
+                <label
+                  style={
+                    labelStyle
+                  }
+                >
+                  WhatsApp
+                </label>
+
+                <input
+                  type="tel"
+
+                  value={
+                    phone
+                  }
+
+                  onChange={(
+                    e
+                  ) =>
+                    setPhone(
+                      e.target.value
+                    )
+                  }
+
+                  style={
+                    inputStyle
+                  }
+                />
+
+                <label
+                  style={
+                    labelStyle
+                  }
+                >
+                  Tipo de evento
+                </label>
+
+                <select
+                  value={
+                    eventType
+                  }
+
+                  onChange={(
+                    e
+                  ) =>
+                    setEventType(
+                      e.target.value
+                    )
+                  }
+
+                  style={
+                    inputStyle
+                  }
+                >
+                  <option value="">
+                    Selecciona
+                  </option>
+
+                  <option value="Corporativo">
+                    Corporativo
+                  </option>
+
+                  <option value="Boda">
+                    Boda
+                  </option>
+
+                  <option value="Cumpleaños">
+                    Cumpleaños
+                  </option>
+
+                  <option value="Universidad">
+                    Universidad
+                  </option>
+
+                  <option value="Expo">
+                    Expo
+                  </option>
+
+                  <option value="Evento privado">
+                    Evento privado
+                  </option>
+
+                  <option value="Otro">
+                    Otro
+                  </option>
+                </select>
+
+                <label
+                  style={
+                    labelStyle
+                  }
+                >
+                  Dirección del evento
+                </label>
+
+                <input
+                  value={
+                    eventAddress
+                  }
+
+                  onChange={(
+                    e
+                  ) =>
+                    setEventAddress(
+                      e.target.value
+                    )
+                  }
+
+                  placeholder="Calle, número, colonia..."
+                  style={
+                    inputStyle
+                  }
+                />
+
+                <button
+                  onClick={
+                    createHold
+                  }
+
+                  disabled={
+                    creatingHold
+                  }
+
+                  style={
+                    reserveButtonStyle
+                  }
+                >
+                  {creatingHold
+                    ? "Apartando..."
+                    : "Apartar fecha 15 minutos"}
+                </button>
               </div>
+            )}
+
+          {/* HOLD ACTIVO */}
+
+          {hold && (
+            <div
+              style={
+                holdBoxStyle
+              }
+            >
+              <div
+                style={
+                  holdTitleStyle
+                }
+              >
+                ✓ Fecha apartada
+              </div>
+
+              {secondsRemaining >
+              0 ? (
+                <>
+                  <p>
+                    Tu Coffee Cart está
+                    reservado temporalmente.
+                  </p>
+
+                  <div
+                    style={
+                      timerStyle
+                    }
+                  >
+                    {formatCountdown(
+                      secondsRemaining
+                    )}
+                  </div>
+
+                  <div
+                    style={
+                      mutedStyle
+                    }
+                  >
+                    Tiempo restante para
+                    completar el pago.
+                  </div>
+
+                  <button
+                    style={
+                      paymentButtonStyle
+                    }
+                  >
+                    Continuar al pago
+                  </button>
+
+                  <div
+                    style={
+                      paymentNoticeStyle
+                    }
+                  >
+                    El botón de pago será
+                    conectado a Shopify en
+                    el siguiente paso.
+                  </div>
+                </>
+              ) : (
+                <div
+                  style={
+                    errorBoxStyle
+                  }
+                >
+                  El tiempo de apartado
+                  terminó. Actualiza la
+                  página para consultar
+                  disponibilidad nuevamente.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ERROR */}
+
+          {error && (
+            <div
+              style={
+                errorBoxStyle
+              }
+            >
+              {error}
             </div>
           )}
         </div>
@@ -792,256 +1673,415 @@ export default function Home() {
 // ============================================
 
 const mainStyle = {
-  minHeight: "100vh",
+  minHeight:
+    "100vh",
 
-  background: "#111111",
-  color: "white",
+  background:
+    "#111111",
 
-  padding: "50px 20px",
+  color:
+    "white",
+
+  padding:
+    "50px 20px",
 
   fontFamily:
     "Arial, Helvetica, sans-serif",
 };
 
 const containerStyle = {
-  maxWidth: "700px",
+  maxWidth:
+    "700px",
 
-  margin: "0 auto",
+  margin:
+    "0 auto",
 };
 
 const headerStyle = {
-  marginBottom: "40px",
+  marginBottom:
+    "40px",
 };
 
 const brandStyle = {
-  fontSize: "14px",
+  fontSize:
+    "14px",
 
-  letterSpacing: "2px",
+  letterSpacing:
+    "2px",
 
-  marginBottom: "12px",
+  marginBottom:
+    "12px",
 };
 
 const titleStyle = {
-  fontSize: "42px",
+  fontSize:
+    "42px",
 
-  margin: 0,
+  margin:
+    0,
 };
 
 const subtitleStyle = {
-  color: "#bbbbbb",
+  color:
+    "#bbbbbb",
 
-  fontSize: "18px",
+  fontSize:
+    "18px",
 
-  lineHeight: 1.5,
+  lineHeight:
+    1.5,
 };
 
 const cardStyle = {
-  background: "#1c1c1c",
+  background:
+    "#1c1c1c",
 
-  padding: "30px",
+  padding:
+    "30px",
 
-  borderRadius: "16px",
+  borderRadius:
+    "16px",
 };
 
 const labelStyle = {
-  display: "block",
+  display:
+    "block",
 
-  marginBottom: "0px",
-
-  fontWeight: "500",
+  fontWeight:
+    "500",
 };
 
 const inputStyle = {
-  width: "100%",
+  width:
+    "100%",
 
-  boxSizing: "border-box",
+  boxSizing:
+    "border-box",
 
-  padding: "14px",
+  padding:
+    "14px",
 
-  marginTop: "8px",
-  marginBottom: "22px",
+  marginTop:
+    "8px",
 
-  background: "#292929",
-  color: "white",
+  marginBottom:
+    "22px",
 
-  border: "1px solid #444444",
+  background:
+    "#292929",
 
-  borderRadius: "8px",
+  color:
+    "white",
 
-  fontSize: "16px",
+  border:
+    "1px solid #444",
+
+  borderRadius:
+    "8px",
+
+  fontSize:
+    "16px",
 };
 
-const extrasContainerStyle = {
-  display: "flex",
+const extrasStyle = {
+  display:
+    "flex",
 
-  flexDirection: "column",
+  flexDirection:
+    "column",
 
-  gap: "14px",
+  gap:
+    "14px",
 
-  marginTop: "5px",
-  marginBottom: "28px",
+  marginBottom:
+    "28px",
 };
 
-const checkboxLabelStyle = {
-  display: "flex",
+const checkboxStyle = {
+  display:
+    "flex",
 
-  alignItems: "center",
+  alignItems:
+    "center",
 
-  gap: "10px",
-
-  cursor: "pointer",
-};
-
-const secondaryButtonStyle = {
-  width: "100%",
-
-  padding: "16px",
-
-  marginBottom: "15px",
-
-  border: "1px solid #666666",
-
-  borderRadius: "10px",
-
-  background: "#252525",
-
-  color: "white",
-
-  fontSize: "16px",
-  fontWeight: "bold",
-
-  cursor: "pointer",
+  gap:
+    "10px",
 };
 
 const primaryButtonStyle = {
-  width: "100%",
+  width:
+    "100%",
 
-  padding: "18px",
+  padding:
+    "17px",
 
-  border: "none",
+  marginTop:
+    "10px",
 
-  borderRadius: "10px",
+  background:
+    "#808080",
 
-  background: "#808080",
+  color:
+    "white",
 
-  color: "white",
+  border:
+    "none",
 
-  fontSize: "17px",
-  fontWeight: "bold",
+  borderRadius:
+    "9px",
 
-  cursor: "pointer",
+  fontSize:
+    "17px",
+
+  fontWeight:
+    "bold",
+
+  cursor:
+    "pointer",
+};
+
+const secondaryButtonStyle = {
+  width:
+    "100%",
+
+  padding:
+    "16px",
+
+  background:
+    "#252525",
+
+  color:
+    "white",
+
+  border:
+    "1px solid #666",
+
+  borderRadius:
+    "9px",
+
+  fontSize:
+    "16px",
+
+  fontWeight:
+    "bold",
+
+  cursor:
+    "pointer",
+
+  marginBottom:
+    "16px",
+};
+
+const reserveButtonStyle = {
+  width:
+    "100%",
+
+  padding:
+    "18px",
+
+  background:
+    "#ffffff",
+
+  color:
+    "#111111",
+
+  border:
+    "none",
+
+  borderRadius:
+    "9px",
+
+  fontSize:
+    "17px",
+
+  fontWeight:
+    "bold",
+
+  cursor:
+    "pointer",
+};
+
+const paymentButtonStyle = {
+  width:
+    "100%",
+
+  padding:
+    "18px",
+
+  marginTop:
+    "25px",
+
+  background:
+    "#ffffff",
+
+  color:
+    "#111111",
+
+  border:
+    "none",
+
+  borderRadius:
+    "9px",
+
+  fontSize:
+    "18px",
+
+  fontWeight:
+    "bold",
+
+  cursor:
+    "pointer",
 };
 
 const successBoxStyle = {
-  marginBottom: "20px",
+  padding:
+    "16px",
 
-  padding: "15px",
+  marginBottom:
+    "20px",
 
-  background: "#153c22",
+  background:
+    "#123f23",
 
-  border: "1px solid #246c38",
+  border:
+    "1px solid #24743c",
 
-  borderRadius: "8px",
+  borderRadius:
+    "8px",
 
-  lineHeight: 1.5,
+  lineHeight:
+    1.6,
+};
+
+const quoteStyle = {
+  marginTop:
+    "30px",
+
+  paddingTop:
+    "30px",
+
+  borderTop:
+    "1px solid #444",
+};
+
+const smallLabelStyle = {
+  color:
+    "#aaaaaa",
+
+  fontSize:
+    "13px",
+
+  letterSpacing:
+    "1.5px",
+};
+
+const totalLabelStyle = {
+  marginTop:
+    "30px",
+
+  color:
+    "#bbbbbb",
+};
+
+const totalStyle = {
+  fontSize:
+    "38px",
+
+  fontWeight:
+    "bold",
+
+  marginTop:
+    "5px",
+};
+
+const mutedStyle = {
+  color:
+    "#aaaaaa",
+
+  marginTop:
+    "7px",
+
+  lineHeight:
+    1.5,
+};
+
+const customerSectionStyle = {
+  marginTop:
+    "35px",
+
+  paddingTop:
+    "30px",
+
+  borderTop:
+    "1px solid #444",
+};
+
+const holdBoxStyle = {
+  marginTop:
+    "30px",
+
+  padding:
+    "25px",
+
+  background:
+    "#172a1c",
+
+  border:
+    "1px solid #296b3a",
+
+  borderRadius:
+    "12px",
+
+  textAlign:
+    "center",
+};
+
+const holdTitleStyle = {
+  fontSize:
+    "22px",
+
+  fontWeight:
+    "bold",
+};
+
+const timerStyle = {
+  fontSize:
+    "48px",
+
+  fontWeight:
+    "bold",
+
+  margin:
+    "20px 0 5px",
+};
+
+const paymentNoticeStyle = {
+  marginTop:
+    "15px",
+
+  color:
+    "#aaaaaa",
+
+  fontSize:
+    "13px",
 };
 
 const errorBoxStyle = {
-  marginTop: "20px",
+  marginTop:
+    "20px",
 
-  padding: "15px",
+  padding:
+    "15px",
 
-  background: "#381818",
+  background:
+    "#381818",
 
-  border: "1px solid #682727",
+  border:
+    "1px solid #682727",
 
-  borderRadius: "8px",
+  borderRadius:
+    "8px",
 
-  lineHeight: 1.5,
-};
-
-const quoteContainerStyle = {
-  marginTop: "30px",
-
-  paddingTop: "30px",
-
-  borderTop: "1px solid #444444",
-};
-
-const quoteLabelStyle = {
-  color: "#aaaaaa",
-
-  fontSize: "13px",
-
-  letterSpacing: "1.5px",
-
-  marginBottom: "5px",
-};
-
-const quoteTitleStyle = {
-  marginTop: 0,
-
-  marginBottom: "5px",
-
-  fontSize: "28px",
-};
-
-const quoteStateStyle = {
-  color: "#bbbbbb",
-
-  marginBottom: "20px",
-};
-
-const summaryRowStyle = {
-  marginTop: "10px",
-
-  lineHeight: 1.5,
-};
-
-const extraResultStyle = {
-  marginTop: "8px",
-
-  color: "#dddddd",
-};
-
-const priceLabelStyle = {
-  marginTop: "30px",
-
-  fontSize: "16px",
-
-  color: "#bbbbbb",
-};
-
-const priceStyle = {
-  fontSize: "38px",
-
-  fontWeight: "bold",
-
-  marginTop: "5px",
-};
-
-const depositStyle = {
-  marginTop: "25px",
-};
-
-const balanceStyle = {
-  marginTop: "8px",
-
-  color: "#aaaaaa",
-};
-
-const noticeStyle = {
-  marginTop: "30px",
-
-  padding: "15px",
-
-  background: "#262626",
-
-  borderRadius: "8px",
-
-  color: "#aaaaaa",
-
-  fontSize: "14px",
-
-  lineHeight: 1.5,
+  lineHeight:
+    1.5,
 };
