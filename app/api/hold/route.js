@@ -3,10 +3,11 @@ import { calculateEventPrice } from "@/lib/pricing";
 import { normalizeMexicoPhone } from "@/lib/phone";
 
 function timeToMinutes(time) {
-  const [hours, minutes] = time
-    .slice(0, 5)
-    .split(":")
-    .map(Number);
+  const [hours, minutes] =
+    String(time)
+      .slice(0, 5)
+      .split(":")
+      .map(Number);
 
   return hours * 60 + minutes;
 }
@@ -28,14 +29,14 @@ function isValidEmail(value) {
 
 export async function POST(request) {
   try {
-    const body = await request.json();
+    const body =
+      await request.json();
 
     const {
       serviceAreaId,
       eventDate,
       startTime,
       guests,
-      hours,
 
       matchaBar = false,
       extraBarista = false,
@@ -46,10 +47,26 @@ export async function POST(request) {
 
       eventAddress = "",
       eventType = "",
+      notes = "",
+
+      packageName =
+        "Java Coffee Cart",
     } = body;
 
+    // Compatibilidad frontend nuevo/anterior.
+    const numberHours =
+      Number(
+        body.durationHours ??
+        body.hours
+      );
+
+    const numberGuests =
+      Number(
+        guests
+      );
+
     // ============================================
-    // VALIDACIONES
+    // VALIDACIÓN
     // ============================================
 
     if (!serviceAreaId) {
@@ -59,7 +76,9 @@ export async function POST(request) {
           error:
             "Debes seleccionar una ciudad.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -70,7 +89,9 @@ export async function POST(request) {
           error:
             "Selecciona la fecha del evento.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -81,15 +102,11 @@ export async function POST(request) {
           error:
             "Selecciona la hora del evento.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
-
-    const numberGuests =
-      Number(guests);
-
-    const numberHours =
-      Number(hours);
 
     if (
       !Number.isFinite(
@@ -103,7 +120,9 @@ export async function POST(request) {
           error:
             "Número de invitados inválido.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -119,7 +138,9 @@ export async function POST(request) {
           error:
             "Duración inválida.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -132,7 +153,9 @@ export async function POST(request) {
           error:
             "Escribe tu nombre completo.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -145,7 +168,9 @@ export async function POST(request) {
           error:
             "Ingresa un correo electrónico válido.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -158,10 +183,13 @@ export async function POST(request) {
       return Response.json(
         {
           success: false,
+
           error:
-            "Ingresa un WhatsApp mexicano válido de 10 dígitos.",
+            "Ingresa un teléfono mexicano válido de 10 dígitos.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -175,7 +203,12 @@ export async function POST(request) {
     } = await supabaseAdmin
       .from("service_areas")
       .select(
-        "id, city, state, active"
+        `
+        id,
+        city,
+        state,
+        active
+        `
       )
       .eq(
         "id",
@@ -195,15 +228,18 @@ export async function POST(request) {
       return Response.json(
         {
           success: false,
+
           error:
             "Java Coffee Cart todavía no está disponible en esta zona.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
     // ============================================
-    // PRECIO REAL DESDE SERVIDOR
+    // PRECIO
     // ============================================
 
     const quote =
@@ -214,12 +250,70 @@ export async function POST(request) {
         hours:
           numberHours,
 
-        matchaBar,
-        extraBarista,
+        matchaBar:
+          Boolean(
+            matchaBar
+          ),
+
+        extraBarista:
+          Boolean(
+            extraBarista
+          ),
       });
 
     // ============================================
-    // CARRITOS
+    // CARRITOS ASIGNADOS A ESTA ZONA
+    // ============================================
+
+    const {
+      data: assignments,
+      error: assignmentsError,
+    } = await supabaseAdmin
+      .from(
+        "coffee_cart_service_areas"
+      )
+      .select(
+        "coffee_cart_id"
+      )
+      .eq(
+        "service_area_id",
+        serviceAreaId
+      )
+      .eq(
+        "active",
+        true
+      );
+
+    if (assignmentsError) {
+      throw assignmentsError;
+    }
+
+    const cartIds =
+      (assignments || [])
+        .map(
+          (assignment) =>
+            assignment.coffee_cart_id
+        )
+        .filter(Boolean);
+
+    if (
+      cartIds.length === 0
+    ) {
+      return Response.json(
+        {
+          success: false,
+
+          error:
+            "Actualmente no hay un Java Coffee Cart asignado a esta zona.",
+        },
+        {
+          status: 409,
+        }
+      );
+    }
+
+    // ============================================
+    // CARRITOS ACTIVOS
     // ============================================
 
     const {
@@ -228,7 +322,17 @@ export async function POST(request) {
     } = await supabaseAdmin
       .from("coffee_carts")
       .select(
-        "id, name, code, city, active"
+        `
+        id,
+        name,
+        code,
+        city,
+        active
+        `
+      )
+      .in(
+        "id",
+        cartIds
       )
       .eq(
         "active",
@@ -243,15 +347,18 @@ export async function POST(request) {
       return Response.json(
         {
           success: false,
+
           error:
-            "Actualmente no hay Coffee Carts disponibles.",
+            "Actualmente no hay un Java Coffee Cart activo para esta zona.",
         },
-        { status: 409 }
+        {
+          status: 409,
+        }
       );
     }
 
     // ============================================
-    // RESERVACIONES DEL DÍA
+    // RESERVAS DEL DÍA
     // ============================================
 
     const {
@@ -259,14 +366,16 @@ export async function POST(request) {
       error: bookingsError,
     } = await supabaseAdmin
       .from("bookings")
-      .select(`
+      .select(
+        `
         id,
         coffee_cart_id,
         start_time,
         duration_hours,
         status,
         hold_expires_at
-      `)
+        `
+      )
       .eq(
         "event_date",
         eventDate
@@ -285,7 +394,7 @@ export async function POST(request) {
     }
 
     // ============================================
-    // BUFFER OPERATIVO
+    // BUFFER
     // ============================================
 
     const setupBufferMinutes =
@@ -311,67 +420,69 @@ export async function POST(request) {
       requestedEnd +
       teardownBufferMinutes;
 
-    const now = new Date();
+    const now =
+      new Date();
 
-    let availableCart = null;
+    let availableCart =
+      null;
 
     // ============================================
-    // BUSCAR CARRITO LIBRE
+    // REVALIDAR DISPONIBILIDAD
     // ============================================
 
     for (
       const cart of carts
     ) {
       const cartBookings =
-        (
-          bookings || []
-        ).filter(
-          (booking) => {
-            if (
-              booking
-                .coffee_cart_id !==
-              cart.id
-            ) {
-              return false;
-            }
-
-            if (
-              (
-                booking.status ===
-                  "HOLD" ||
-                booking.status ===
-                  "PAYMENT_PENDING"
-              ) &&
-              booking.hold_expires_at
-            ) {
-              const expiration =
-                new Date(
-                  booking
-                    .hold_expires_at
-                );
-
+        (bookings || [])
+          .filter(
+            (booking) => {
               if (
-                expiration <= now
+                booking
+                  .coffee_cart_id !==
+                cart.id
               ) {
                 return false;
               }
-            }
 
-            return true;
-          }
-        );
+              if (
+                (
+                  booking.status ===
+                    "HOLD" ||
+                  booking.status ===
+                    "PAYMENT_PENDING"
+                ) &&
+                booking
+                  .hold_expires_at
+              ) {
+                const expiration =
+                  new Date(
+                    booking
+                      .hold_expires_at
+                  );
+
+                if (
+                  expiration <=
+                  now
+                ) {
+                  return false;
+                }
+              }
+
+              return true;
+            }
+          );
 
       const hasConflict =
         cartBookings.some(
           (booking) => {
-            const bookingStart =
+            const existingStart =
               timeToMinutes(
-                booking
-                  .start_time
+                booking.start_time
               );
 
-            const bookingEnd =
-              bookingStart +
+            const existingEnd =
+              existingStart +
               Number(
                 booking
                   .duration_hours
@@ -382,10 +493,10 @@ export async function POST(request) {
               requestedBlockStart,
               requestedBlockEnd,
 
-              bookingStart -
+              existingStart -
                 setupBufferMinutes,
 
-              bookingEnd +
+              existingEnd +
                 teardownBufferMinutes
             );
           }
@@ -403,15 +514,18 @@ export async function POST(request) {
       return Response.json(
         {
           success: false,
+
           error:
-            "Ese horario acaba de dejar de estar disponible. Selecciona otra fecha u hora.",
+            "Todos los Java Coffee Carts asignados a esta zona están ocupados en ese horario.",
         },
-        { status: 409 }
+        {
+          status: 409,
+        }
       );
     }
 
     // ============================================
-    // HOLD DE 15 MINUTOS
+    // HOLD
     // ============================================
 
     const holdMinutes =
@@ -424,6 +538,10 @@ export async function POST(request) {
             60 *
             1000
       ).toISOString();
+
+    // ============================================
+    // BOOKING
+    // ============================================
 
     const {
       data: booking,
@@ -439,7 +557,6 @@ export async function POST(request) {
             .trim()
             .toLowerCase(),
 
-        // Siempre E.164.
         phone:
           normalizedPhone,
 
@@ -470,10 +587,12 @@ export async function POST(request) {
           numberGuests,
 
         package_name:
-          "Java Coffee Cart",
+          packageName,
 
         matcha_bar:
-          Boolean(matchaBar),
+          Boolean(
+            matchaBar
+          ),
 
         extra_barista:
           Boolean(
@@ -497,8 +616,13 @@ export async function POST(request) {
 
         coffee_cart_id:
           availableCart.id,
+
+        notes:
+          notes.trim() ||
+          null,
       })
-      .select(`
+      .select(
+        `
         id,
         event_date,
         start_time,
@@ -509,19 +633,31 @@ export async function POST(request) {
         balance,
         status,
         hold_expires_at,
-        phone
-      `)
+        coffee_cart_id
+        `
+      )
       .single();
 
     if (insertError) {
       throw insertError;
     }
 
+    // ============================================
+    // RESPUESTA
+    // ============================================
+
     return Response.json({
       success: true,
 
       message:
         "Tu fecha ha sido apartada temporalmente.",
+
+      bookingId:
+        booking.id,
+
+      holdExpiresAt:
+        booking
+          .hold_expires_at,
 
       hold: {
         bookingId:
@@ -531,16 +667,46 @@ export async function POST(request) {
           booking
             .hold_expires_at,
 
+        holdExpiresAt:
+          booking
+            .hold_expires_at,
+
         minutes:
           holdMinutes,
       },
 
+      booking: {
+        id:
+          booking.id,
+
+        status:
+          booking.status,
+
+        hold_expires_at:
+          booking
+            .hold_expires_at,
+      },
+
       serviceArea: {
+        id:
+          serviceArea.id,
+
         city:
           serviceArea.city,
 
         state:
           serviceArea.state,
+      },
+
+      cart: {
+        id:
+          availableCart.id,
+
+        name:
+          availableCart.name,
+
+        code:
+          availableCart.code,
       },
 
       event: {
@@ -551,6 +717,10 @@ export async function POST(request) {
           booking.start_time,
 
         hours:
+          booking
+            .duration_hours,
+
+        durationHours:
           booking
             .duration_hours,
 
@@ -577,14 +747,6 @@ export async function POST(request) {
         currency:
           "MXN",
       },
-
-      cart: {
-        id:
-          availableCart.id,
-
-        code:
-          availableCart.code,
-      },
     });
   } catch (error) {
     console.error(
@@ -600,7 +762,9 @@ export async function POST(request) {
           error.message ||
           "No fue posible apartar el evento.",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }

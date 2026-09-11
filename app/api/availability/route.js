@@ -1,7 +1,10 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 function timeToMinutes(time) {
-  const [hours, minutes] = time.split(":").map(Number);
+  const [hours, minutes] = String(time)
+    .slice(0, 5)
+    .split(":")
+    .map(Number);
 
   return hours * 60 + minutes;
 }
@@ -17,22 +20,37 @@ function rangesOverlap(
 
 export async function POST(request) {
   try {
-    const body = await request.json();
+    const body =
+      await request.json();
 
     const {
       serviceAreaId,
       eventDate,
       startTime,
-      hours,
     } = body;
+
+    // Compatibilidad:
+    // acepta durationHours o hours.
+    const durationHours =
+      Number(
+        body.durationHours ??
+        body.hours
+      );
+
+    // ============================================
+    // VALIDACIONES
+    // ============================================
 
     if (!serviceAreaId) {
       return Response.json(
         {
           success: false,
-          error: "Debes seleccionar una ciudad.",
+          error:
+            "Debes seleccionar una ciudad.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -40,9 +58,12 @@ export async function POST(request) {
       return Response.json(
         {
           success: false,
-          error: "Debes seleccionar una fecha.",
+          error:
+            "Debes seleccionar una fecha.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -50,26 +71,35 @@ export async function POST(request) {
       return Response.json(
         {
           success: false,
-          error: "Debes seleccionar una hora.",
+          error:
+            "Debes seleccionar una hora.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
-    const durationHours = Number(hours);
-
-    if (!durationHours || durationHours < 1) {
+    if (
+      !Number.isFinite(
+        durationHours
+      ) ||
+      durationHours < 1
+    ) {
       return Response.json(
         {
           success: false,
-          error: "Duración inválida.",
+          error:
+            "Duración inválida.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
     // ============================================
-    // VALIDAR CIUDAD
+    // ZONA DE SERVICIO
     // ============================================
 
     const {
@@ -77,9 +107,22 @@ export async function POST(request) {
       error: serviceAreaError,
     } = await supabaseAdmin
       .from("service_areas")
-      .select("id, city, state")
-      .eq("id", serviceAreaId)
-      .eq("active", true)
+      .select(
+        `
+        id,
+        city,
+        state,
+        active
+        `
+      )
+      .eq(
+        "id",
+        serviceAreaId
+      )
+      .eq(
+        "active",
+        true
+      )
       .maybeSingle();
 
     if (serviceAreaError) {
@@ -93,12 +136,59 @@ export async function POST(request) {
           error:
             "Java Coffee Cart todavía no está disponible en esta zona.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
     // ============================================
-    // BUSCAR CARRITOS ACTIVOS
+    // BUSCAR CARRITOS ASIGNADOS A ESTA ZONA
+    // ============================================
+
+    const {
+      data: assignments,
+      error: assignmentsError,
+    } = await supabaseAdmin
+      .from(
+        "coffee_cart_service_areas"
+      )
+      .select(
+        "coffee_cart_id"
+      )
+      .eq(
+        "service_area_id",
+        serviceAreaId
+      )
+      .eq(
+        "active",
+        true
+      );
+
+    if (assignmentsError) {
+      throw assignmentsError;
+    }
+
+    const cartIds =
+      (assignments || [])
+        .map(
+          (assignment) =>
+            assignment.coffee_cart_id
+        )
+        .filter(Boolean);
+
+    if (cartIds.length === 0) {
+      return Response.json({
+        success: true,
+        available: false,
+
+        message:
+          "Actualmente no hay un Java Coffee Cart asignado a esta zona.",
+      });
+    }
+
+    // ============================================
+    // OBTENER CARRITOS ACTIVOS
     // ============================================
 
     const {
@@ -106,26 +196,40 @@ export async function POST(request) {
       error: cartsError,
     } = await supabaseAdmin
       .from("coffee_carts")
-      .select("id, name, code")
-      .eq("active", true);
+      .select(
+        `
+        id,
+        name,
+        code,
+        city,
+        active
+        `
+      )
+      .in(
+        "id",
+        cartIds
+      )
+      .eq(
+        "active",
+        true
+      );
 
     if (cartsError) {
       throw cartsError;
     }
 
-    if (!carts || carts.length === 0) {
-      return Response.json(
-        {
-          success: true,
-          available: false,
-          error:
-            "Actualmente no hay Coffee Carts disponibles.",
-        }
-      );
+    if (!carts?.length) {
+      return Response.json({
+        success: true,
+        available: false,
+
+        message:
+          "Actualmente no hay un Java Coffee Cart activo para esta zona.",
+      });
     }
 
     // ============================================
-    // OBTENER RESERVAS DE ESE DÍA
+    // RESERVACIONES DEL DÍA
     // ============================================
 
     const {
@@ -133,129 +237,175 @@ export async function POST(request) {
       error: bookingsError,
     } = await supabaseAdmin
       .from("bookings")
-      .select(`
+      .select(
+        `
         id,
         coffee_cart_id,
         start_time,
         duration_hours,
         status,
         hold_expires_at
-      `)
-      .eq("event_date", eventDate)
-      .in("status", [
-        "HOLD",
-        "PAYMENT_PENDING",
-        "CONFIRMED",
-      ]);
+        `
+      )
+      .eq(
+        "event_date",
+        eventDate
+      )
+      .in(
+        "status",
+        [
+          "HOLD",
+          "PAYMENT_PENDING",
+          "CONFIRMED",
+        ]
+      );
 
     if (bookingsError) {
       throw bookingsError;
     }
 
     // ============================================
-    // HORARIO SOLICITADO
+    // BUFFER OPERATIVO
     // ============================================
 
-    const setupBuffer = 90;
-    const teardownBuffer = 60;
+    const setupBufferMinutes =
+      90;
 
-    const eventStart =
-      timeToMinutes(startTime);
+    const teardownBufferMinutes =
+      60;
 
-    const eventEnd =
-      eventStart +
+    const requestedStart =
+      timeToMinutes(
+        startTime
+      );
+
+    const requestedEnd =
+      requestedStart +
       durationHours * 60;
 
     const requestedBlockStart =
-      eventStart - setupBuffer;
+      requestedStart -
+      setupBufferMinutes;
 
     const requestedBlockEnd =
-      eventEnd + teardownBuffer;
+      requestedEnd +
+      teardownBufferMinutes;
 
-    const now = new Date();
+    const now =
+      new Date();
 
     // ============================================
-    // BUSCAR UN CARRITO DISPONIBLE
+    // BUSCAR CARRITO DISPONIBLE
     // ============================================
 
-    let availableCart = null;
+    let availableCart =
+      null;
 
-    for (const cart of carts) {
+    for (
+      const cart of carts
+    ) {
       const cartBookings =
-        bookings?.filter((booking) => {
-          if (
-            booking.coffee_cart_id !==
-            cart.id
-          ) {
-            return false;
-          }
+        (bookings || [])
+          .filter(
+            (booking) => {
+              if (
+                booking
+                  .coffee_cart_id !==
+                cart.id
+              ) {
+                return false;
+              }
 
-          // Ignorar HOLD vencidos
-          if (
-            booking.status === "HOLD" &&
-            booking.hold_expires_at
-          ) {
-            const expiration = new Date(
-              booking.hold_expires_at
-            );
+              // HOLD o PAYMENT_PENDING vencido
+              // ya no bloquea el cart.
+              if (
+                (
+                  booking.status ===
+                    "HOLD" ||
+                  booking.status ===
+                    "PAYMENT_PENDING"
+                ) &&
+                booking
+                  .hold_expires_at
+              ) {
+                const expiration =
+                  new Date(
+                    booking
+                      .hold_expires_at
+                  );
 
-            if (expiration < now) {
-              return false;
+                if (
+                  expiration <=
+                  now
+                ) {
+                  return false;
+                }
+              }
+
+              return true;
             }
-          }
-
-          return true;
-        }) || [];
+          );
 
       const hasConflict =
-        cartBookings.some((booking) => {
-          const bookingStart =
-            timeToMinutes(
-              booking.start_time
+        cartBookings.some(
+          (booking) => {
+            const existingStart =
+              timeToMinutes(
+                booking.start_time
+              );
+
+            const existingEnd =
+              existingStart +
+              Number(
+                booking
+                  .duration_hours
+              ) *
+                60;
+
+            const existingBlockStart =
+              existingStart -
+              setupBufferMinutes;
+
+            const existingBlockEnd =
+              existingEnd +
+              teardownBufferMinutes;
+
+            return rangesOverlap(
+              requestedBlockStart,
+              requestedBlockEnd,
+
+              existingBlockStart,
+              existingBlockEnd
             );
-
-          const bookingEnd =
-            bookingStart +
-            Number(
-              booking.duration_hours
-            ) *
-              60;
-
-          const existingBlockStart =
-            bookingStart -
-            setupBuffer;
-
-          const existingBlockEnd =
-            bookingEnd +
-            teardownBuffer;
-
-          return rangesOverlap(
-            requestedBlockStart,
-            requestedBlockEnd,
-            existingBlockStart,
-            existingBlockEnd
-          );
-        });
+          }
+        );
 
       if (!hasConflict) {
-        availableCart = cart;
+        availableCart =
+          cart;
+
         break;
       }
     }
 
     // ============================================
-    // RESULTADO
+    // NO DISPONIBLE
     // ============================================
 
     if (!availableCart) {
       return Response.json({
         success: true,
+
         available: false,
 
         message:
-          "No hay un Java Coffee Cart disponible en ese horario.",
+          "Todos los Java Coffee Carts asignados a esta zona están ocupados en ese horario.",
       });
     }
+
+    // ============================================
+    // DISPONIBLE
+    // ============================================
 
     return Response.json({
       success: true,
@@ -263,26 +413,46 @@ export async function POST(request) {
       available: true,
 
       serviceArea: {
-        city: serviceArea.city,
-        state: serviceArea.state,
+        id:
+          serviceArea.id,
+
+        city:
+          serviceArea.city,
+
+        state:
+          serviceArea.state,
       },
 
       cart: {
-        id: availableCart.id,
-        name: availableCart.name,
-        code: availableCart.code,
+        id:
+          availableCart.id,
+
+        name:
+          availableCart.name,
+
+        code:
+          availableCart.code,
       },
 
       event: {
-        date: eventDate,
+        date:
+          eventDate,
+
         startTime,
-        hours: durationHours,
+
+        hours:
+          durationHours,
+
+        durationHours:
+          durationHours,
       },
 
       buffers: {
-        setupMinutes: setupBuffer,
+        setupMinutes:
+          setupBufferMinutes,
+
         teardownMinutes:
-          teardownBuffer,
+          teardownBufferMinutes,
       },
     });
   } catch (error) {
@@ -299,7 +469,6 @@ export async function POST(request) {
           error.message ||
           "No fue posible verificar la disponibilidad.",
       },
-
       {
         status: 500,
       }
