@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { calculateEventPrice } from "@/lib/pricing";
+import { normalizeMexicoPhone } from "@/lib/phone";
 
 function timeToMinutes(time) {
   const [hours, minutes] = time
@@ -19,16 +20,20 @@ function rangesOverlap(
   return startA < endB && startB < endA;
 }
 
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+    String(value || "").trim()
+  );
+}
+
 export async function POST(request) {
   try {
     const body = await request.json();
 
     const {
       serviceAreaId,
-
       eventDate,
       startTime,
-
       guests,
       hours,
 
@@ -51,11 +56,10 @@ export async function POST(request) {
       return Response.json(
         {
           success: false,
-          error: "Debes seleccionar una ciudad.",
+          error:
+            "Debes seleccionar una ciudad.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
@@ -64,11 +68,9 @@ export async function POST(request) {
         {
           success: false,
           error:
-            "Debes seleccionar la fecha del evento.",
+            "Selecciona la fecha del evento.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
@@ -77,83 +79,94 @@ export async function POST(request) {
         {
           success: false,
           error:
-            "Debes seleccionar la hora del evento.",
+            "Selecciona la hora del evento.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
-    const numberGuests = Number(guests);
-    const numberHours = Number(hours);
+    const numberGuests =
+      Number(guests);
 
-    if (!numberGuests || numberGuests < 1) {
+    const numberHours =
+      Number(hours);
+
+    if (
+      !Number.isFinite(
+        numberGuests
+      ) ||
+      numberGuests < 1
+    ) {
       return Response.json(
         {
           success: false,
           error:
-            "El número de invitados no es válido.",
+            "Número de invitados inválido.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
-    if (!numberHours || numberHours < 1) {
+    if (
+      !Number.isFinite(
+        numberHours
+      ) ||
+      numberHours < 1
+    ) {
       return Response.json(
         {
           success: false,
           error:
-            "La duración del evento no es válida.",
+            "Duración inválida.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
-    if (!customerName?.trim()) {
-      return Response.json(
-        {
-          success: false,
-          error: "Escribe tu nombre.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    if (!email?.trim()) {
+    if (
+      !customerName?.trim()
+    ) {
       return Response.json(
         {
           success: false,
           error:
-            "Escribe tu correo electrónico.",
+            "Escribe tu nombre completo.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
-    if (!phone?.trim()) {
+    if (
+      !isValidEmail(email)
+    ) {
       return Response.json(
         {
           success: false,
           error:
-            "Escribe tu número de WhatsApp.",
+            "Ingresa un correo electrónico válido.",
         },
+        { status: 400 }
+      );
+    }
+
+    const normalizedPhone =
+      normalizeMexicoPhone(
+        phone
+      );
+
+    if (!normalizedPhone) {
+      return Response.json(
         {
-          status: 400,
-        }
+          success: false,
+          error:
+            "Ingresa un WhatsApp mexicano válido de 10 dígitos.",
+        },
+        { status: 400 }
       );
     }
 
     // ============================================
-    // VALIDAR ZONA DE SERVICIO
+    // ZONA
     // ============================================
 
     const {
@@ -162,15 +175,16 @@ export async function POST(request) {
     } = await supabaseAdmin
       .from("service_areas")
       .select(
-        `
-        id,
-        city,
-        state,
-        active
-        `
+        "id, city, state, active"
       )
-      .eq("id", serviceAreaId)
-      .eq("active", true)
+      .eq(
+        "id",
+        serviceAreaId
+      )
+      .eq(
+        "active",
+        true
+      )
       .maybeSingle();
 
     if (serviceAreaError) {
@@ -181,29 +195,31 @@ export async function POST(request) {
       return Response.json(
         {
           success: false,
-
           error:
             "Java Coffee Cart todavía no está disponible en esta zona.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
     // ============================================
-    // CALCULAR PRECIO NUEVAMENTE EN SERVIDOR
+    // PRECIO REAL DESDE SERVIDOR
     // ============================================
 
-    const quote = calculateEventPrice({
-      guests: numberGuests,
-      hours: numberHours,
-      matchaBar,
-      extraBarista,
-    });
+    const quote =
+      calculateEventPrice({
+        guests:
+          numberGuests,
+
+        hours:
+          numberHours,
+
+        matchaBar,
+        extraBarista,
+      });
 
     // ============================================
-    // BUSCAR COFFEE CARTS ACTIVOS
+    // CARRITOS
     // ============================================
 
     const {
@@ -212,36 +228,30 @@ export async function POST(request) {
     } = await supabaseAdmin
       .from("coffee_carts")
       .select(
-        `
-        id,
-        name,
-        code,
-        city,
-        active
-        `
+        "id, name, code, city, active"
       )
-      .eq("active", true);
+      .eq(
+        "active",
+        true
+      );
 
     if (cartsError) {
       throw cartsError;
     }
 
-    if (!carts || carts.length === 0) {
+    if (!carts?.length) {
       return Response.json(
         {
           success: false,
-
           error:
             "Actualmente no hay Coffee Carts disponibles.",
         },
-        {
-          status: 409,
-        }
+        { status: 409 }
       );
     }
 
     // ============================================
-    // CONSULTAR RESERVACIONES DE ESE DÍA
+    // RESERVACIONES DEL DÍA
     // ============================================
 
     const {
@@ -249,36 +259,45 @@ export async function POST(request) {
       error: bookingsError,
     } = await supabaseAdmin
       .from("bookings")
-      .select(
-        `
+      .select(`
         id,
         coffee_cart_id,
         start_time,
         duration_hours,
         status,
         hold_expires_at
-        `
+      `)
+      .eq(
+        "event_date",
+        eventDate
       )
-      .eq("event_date", eventDate)
-      .in("status", [
-        "HOLD",
-        "PAYMENT_PENDING",
-        "CONFIRMED",
-      ]);
+      .in(
+        "status",
+        [
+          "HOLD",
+          "PAYMENT_PENDING",
+          "CONFIRMED",
+        ]
+      );
 
     if (bookingsError) {
       throw bookingsError;
     }
 
     // ============================================
-    // BLOQUE DE TIEMPO
+    // BUFFER OPERATIVO
     // ============================================
 
-    const setupBufferMinutes = 90;
-    const teardownBufferMinutes = 60;
+    const setupBufferMinutes =
+      90;
+
+    const teardownBufferMinutes =
+      60;
 
     const requestedStart =
-      timeToMinutes(startTime);
+      timeToMinutes(
+        startTime
+      );
 
     const requestedEnd =
       requestedStart +
@@ -294,104 +313,117 @@ export async function POST(request) {
 
     const now = new Date();
 
-    // ============================================
-    // ENCONTRAR UN CART DISPONIBLE
-    // ============================================
-
     let availableCart = null;
 
-    for (const cart of carts) {
+    // ============================================
+    // BUSCAR CARRITO LIBRE
+    // ============================================
+
+    for (
+      const cart of carts
+    ) {
       const cartBookings =
-        bookings?.filter((booking) => {
-          if (
-            booking.coffee_cart_id !==
-            cart.id
-          ) {
-            return false;
-          }
-
-          // Los HOLD vencidos ya no bloquean.
-          if (
-            booking.status === "HOLD" &&
-            booking.hold_expires_at
-          ) {
-            const expiration = new Date(
-              booking.hold_expires_at
-            );
-
-            if (expiration <= now) {
+        (
+          bookings || []
+        ).filter(
+          (booking) => {
+            if (
+              booking
+                .coffee_cart_id !==
+              cart.id
+            ) {
               return false;
             }
-          }
 
-          return true;
-        }) || [];
+            if (
+              (
+                booking.status ===
+                  "HOLD" ||
+                booking.status ===
+                  "PAYMENT_PENDING"
+              ) &&
+              booking.hold_expires_at
+            ) {
+              const expiration =
+                new Date(
+                  booking
+                    .hold_expires_at
+                );
+
+              if (
+                expiration <= now
+              ) {
+                return false;
+              }
+            }
+
+            return true;
+          }
+        );
 
       const hasConflict =
-        cartBookings.some((booking) => {
-          const bookingStart =
-            timeToMinutes(
-              booking.start_time
+        cartBookings.some(
+          (booking) => {
+            const bookingStart =
+              timeToMinutes(
+                booking
+                  .start_time
+              );
+
+            const bookingEnd =
+              bookingStart +
+              Number(
+                booking
+                  .duration_hours
+              ) *
+                60;
+
+            return rangesOverlap(
+              requestedBlockStart,
+              requestedBlockEnd,
+
+              bookingStart -
+                setupBufferMinutes,
+
+              bookingEnd +
+                teardownBufferMinutes
             );
-
-          const bookingEnd =
-            bookingStart +
-            Number(
-              booking.duration_hours
-            ) *
-              60;
-
-          const existingBlockStart =
-            bookingStart -
-            setupBufferMinutes;
-
-          const existingBlockEnd =
-            bookingEnd +
-            teardownBufferMinutes;
-
-          return rangesOverlap(
-            requestedBlockStart,
-            requestedBlockEnd,
-
-            existingBlockStart,
-            existingBlockEnd
-          );
-        });
+          }
+        );
 
       if (!hasConflict) {
-        availableCart = cart;
+        availableCart =
+          cart;
+
         break;
       }
     }
-
-    // ============================================
-    // NO HAY DISPONIBILIDAD
-    // ============================================
 
     if (!availableCart) {
       return Response.json(
         {
           success: false,
-
           error:
             "Ese horario acaba de dejar de estar disponible. Selecciona otra fecha u hora.",
         },
-        {
-          status: 409,
-        }
+        { status: 409 }
       );
     }
 
     // ============================================
-    // CREAR HOLD DE 15 MINUTOS
+    // HOLD DE 15 MINUTOS
     // ============================================
 
-    const holdMinutes = 15;
+    const holdMinutes =
+      15;
 
-    const holdExpiresAt = new Date(
-      Date.now() +
-        holdMinutes * 60 * 1000
-    ).toISOString();
+    const holdExpiresAt =
+      new Date(
+        Date.now() +
+          holdMinutes *
+            60 *
+            1000
+      ).toISOString();
 
     const {
       data: booking,
@@ -403,13 +435,17 @@ export async function POST(request) {
           customerName.trim(),
 
         email:
-          email.trim().toLowerCase(),
+          email
+            .trim()
+            .toLowerCase(),
 
+        // Siempre E.164.
         phone:
-          phone.trim(),
+          normalizedPhone,
 
         event_type:
-          eventType.trim() || null,
+          eventType.trim() ||
+          null,
 
         city:
           serviceArea.city,
@@ -418,7 +454,8 @@ export async function POST(request) {
           serviceArea.state,
 
         event_address:
-          eventAddress.trim() || null,
+          eventAddress.trim() ||
+          null,
 
         event_date:
           eventDate,
@@ -439,7 +476,9 @@ export async function POST(request) {
           Boolean(matchaBar),
 
         extra_barista:
-          Boolean(extraBarista),
+          Boolean(
+            extraBarista
+          ),
 
         total:
           quote.total,
@@ -459,8 +498,7 @@ export async function POST(request) {
         coffee_cart_id:
           availableCart.id,
       })
-      .select(
-        `
+      .select(`
         id,
         event_date,
         start_time,
@@ -470,18 +508,14 @@ export async function POST(request) {
         deposit,
         balance,
         status,
-        hold_expires_at
-        `
-      )
+        hold_expires_at,
+        phone
+      `)
       .single();
 
     if (insertError) {
       throw insertError;
     }
-
-    // ============================================
-    // RESPUESTA
-    // ============================================
 
     return Response.json({
       success: true,
@@ -494,7 +528,8 @@ export async function POST(request) {
           booking.id,
 
         expiresAt:
-          booking.hold_expires_at,
+          booking
+            .hold_expires_at,
 
         minutes:
           holdMinutes,
@@ -516,7 +551,8 @@ export async function POST(request) {
           booking.start_time,
 
         hours:
-          booking.duration_hours,
+          booking
+            .duration_hours,
 
         guests:
           booking.guests,
@@ -524,13 +560,19 @@ export async function POST(request) {
 
       quote: {
         total:
-          Number(booking.total),
+          Number(
+            booking.total
+          ),
 
         deposit:
-          Number(booking.deposit),
+          Number(
+            booking.deposit
+          ),
 
         balance:
-          Number(booking.balance),
+          Number(
+            booking.balance
+          ),
 
         currency:
           "MXN",
@@ -558,9 +600,7 @@ export async function POST(request) {
           error.message ||
           "No fue posible apartar el evento.",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }

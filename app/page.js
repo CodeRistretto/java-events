@@ -5,6 +5,11 @@ import {
   useState,
 } from "react";
 
+import {
+  formatMexicoPhoneInput,
+  isValidMexicoPhone,
+} from "@/lib/phone";
+
 export default function Home() {
   // ============================================
   // EVENTO
@@ -70,6 +75,11 @@ export default function Home() {
   ] = useState("");
 
   const [
+    phoneError,
+    setPhoneError,
+  ] = useState("");
+
+  const [
     eventType,
     setEventType,
   ] = useState("");
@@ -128,6 +138,11 @@ export default function Home() {
   ] = useState(false);
 
   const [
+    creatingCheckout,
+    setCreatingCheckout,
+  ] = useState(false);
+
+  const [
     error,
     setError,
   ] = useState("");
@@ -140,27 +155,18 @@ export default function Home() {
     async function loadServiceAreas() {
       try {
         setLoadingCities(true);
-        setError("");
 
         const response =
           await fetch(
             "/api/service-areas",
             {
-              cache: "no-store",
+              cache:
+                "no-store",
             }
           );
 
-        const text =
-          await response.text();
-
-        if (!text) {
-          throw new Error(
-            "El servidor no devolvió ciudades."
-          );
-        }
-
         const data =
-          JSON.parse(text);
+          await response.json();
 
         if (
           !response.ok ||
@@ -173,25 +179,22 @@ export default function Home() {
         }
 
         const areas =
-          data.serviceAreas || [];
+          data.serviceAreas ||
+          [];
 
         setServiceAreas(
           areas
         );
 
         if (
-          areas.length > 0
+          areas.length >
+          0
         ) {
           setServiceAreaId(
             areas[0].id
           );
         }
       } catch (err) {
-        console.error(
-          "Service areas:",
-          err
-        );
-
         setError(
           err.message
         );
@@ -206,7 +209,7 @@ export default function Home() {
   }, []);
 
   // ============================================
-  // CUENTA REGRESIVA HOLD
+  // TIMER
   // ============================================
 
   useEffect(() => {
@@ -216,29 +219,27 @@ export default function Home() {
       return;
     }
 
-    function updateTimer() {
-      const expiration =
-        new Date(
-          hold.expiresAt
-        ).getTime();
+    const updateTimer =
+      () => {
+        const seconds =
+          Math.max(
+            0,
 
-      const now =
-        Date.now();
+            Math.floor(
+              (
+                new Date(
+                  hold.expiresAt
+                ).getTime() -
+                Date.now()
+              ) /
+                1000
+            )
+          );
 
-      const seconds =
-        Math.max(
-          0,
-          Math.floor(
-            (expiration -
-              now) /
-              1000
-          )
+        setSecondsRemaining(
+          seconds
         );
-
-      setSecondsRemaining(
-        seconds
-      );
-    }
+      };
 
     updateTimer();
 
@@ -252,7 +253,9 @@ export default function Home() {
       clearInterval(
         interval
       );
-  }, [hold]);
+  }, [
+    hold?.expiresAt,
+  ]);
 
   // ============================================
   // HELPERS
@@ -285,7 +288,7 @@ export default function Home() {
   }
 
   function formatMoney(
-    amount
+    value
   ) {
     return new Intl.NumberFormat(
       "es-MX",
@@ -297,14 +300,14 @@ export default function Home() {
           "MXN",
       }
     ).format(
-      amount
+      value
     );
   }
 
   function formatDate(
-    date
+    value
   ) {
-    if (!date) {
+    if (!value) {
       return "";
     }
 
@@ -313,16 +316,9 @@ export default function Home() {
       month,
       day,
     ] =
-      date
+      value
         .split("-")
         .map(Number);
-
-    const localDate =
-      new Date(
-        year,
-        month - 1,
-        day
-      );
 
     return new Intl.DateTimeFormat(
       "es-MX",
@@ -337,14 +333,18 @@ export default function Home() {
           "numeric",
       }
     ).format(
-      localDate
+      new Date(
+        year,
+        month - 1,
+        day
+      )
     );
   }
 
   function formatTime(
-    time
+    value
   ) {
-    if (!time) {
+    if (!value) {
       return "";
     }
 
@@ -352,7 +352,7 @@ export default function Home() {
       hour,
       minute,
     ] =
-      time
+      value
         .slice(0, 5)
         .split(":")
         .map(Number);
@@ -392,7 +392,7 @@ export default function Home() {
         seconds / 60
       );
 
-    const remainingSeconds =
+    const remaining =
       seconds % 60;
 
     return `${String(
@@ -401,7 +401,7 @@ export default function Home() {
       2,
       "0"
     )}:${String(
-      remainingSeconds
+      remaining
     ).padStart(
       2,
       "0"
@@ -426,28 +426,13 @@ export default function Home() {
         null
       );
 
-      const selectedServiceAreaId =
-        getServiceAreaId();
-
-      if (
-        !selectedServiceAreaId
-      ) {
-        throw new Error(
-          "Selecciona una ciudad."
-        );
-      }
-
-      if (
-        !eventDate
-      ) {
+      if (!eventDate) {
         throw new Error(
           "Selecciona la fecha."
         );
       }
 
-      if (
-        !startTime
-      ) {
+      if (!startTime) {
         throw new Error(
           "Selecciona la hora."
         );
@@ -466,35 +451,24 @@ export default function Home() {
             },
 
             body:
-              JSON.stringify(
-                {
-                  serviceAreaId:
-                    selectedServiceAreaId,
+              JSON.stringify({
+                serviceAreaId:
+                  getServiceAreaId(),
 
-                  eventDate,
+                eventDate,
 
-                  startTime,
+                startTime,
 
-                  hours:
-                    Number(
-                      hours
-                    ),
-                }
-              ),
+                hours:
+                  Number(
+                    hours
+                  ),
+              }),
           }
         );
 
-      const text =
-        await response.text();
-
-      if (!text) {
-        throw new Error(
-          "No se recibió respuesta de disponibilidad."
-        );
-      }
-
       const data =
-        JSON.parse(text);
+        await response.json();
 
       if (
         !response.ok ||
@@ -519,11 +493,6 @@ export default function Home() {
         );
       }
     } catch (err) {
-      console.error(
-        "Availability:",
-        err
-      );
-
       setError(
         err.message
       );
@@ -548,21 +517,6 @@ export default function Home() {
         ""
       );
 
-      setQuote(
-        null
-      );
-
-      const selectedServiceAreaId =
-        getServiceAreaId();
-
-      if (
-        !selectedServiceAreaId
-      ) {
-        throw new Error(
-          "Selecciona una ciudad."
-        );
-      }
-
       const response =
         await fetch(
           "/api/quote",
@@ -576,40 +530,29 @@ export default function Home() {
             },
 
             body:
-              JSON.stringify(
-                {
-                  serviceAreaId:
-                    selectedServiceAreaId,
+              JSON.stringify({
+                serviceAreaId:
+                  getServiceAreaId(),
 
-                  guests:
-                    Number(
-                      guests
-                    ),
+                guests:
+                  Number(
+                    guests
+                  ),
 
-                  hours:
-                    Number(
-                      hours
-                    ),
+                hours:
+                  Number(
+                    hours
+                  ),
 
-                  matchaBar,
+                matchaBar,
 
-                  extraBarista,
-                }
-              ),
+                extraBarista,
+              }),
           }
         );
 
-      const text =
-        await response.text();
-
-      if (!text) {
-        throw new Error(
-          "No se recibió cotización."
-        );
-      }
-
       const data =
-        JSON.parse(text);
+        await response.json();
 
       if (
         !response.ok ||
@@ -625,11 +568,6 @@ export default function Home() {
         data
       );
     } catch (err) {
-      console.error(
-        "Quote:",
-        err
-      );
-
       setError(
         err.message
       );
@@ -641,7 +579,7 @@ export default function Home() {
   }
 
   // ============================================
-  // CREAR HOLD
+  // HOLD
   // ============================================
 
   async function createHold() {
@@ -654,8 +592,13 @@ export default function Home() {
         ""
       );
 
+      setPhoneError(
+        ""
+      );
+
       if (
-        !availability?.available
+        !availability
+          ?.available
       ) {
         throw new Error(
           "Primero verifica la disponibilidad."
@@ -680,15 +623,21 @@ export default function Home() {
         !email.trim()
       ) {
         throw new Error(
-          "Escribe tu correo electrónico."
+          "Escribe tu correo."
         );
       }
 
       if (
-        !phone.trim()
+        !isValidMexicoPhone(
+          phone
+        )
       ) {
+        setPhoneError(
+          "Ingresa 10 dígitos. Ejemplo: 871 123 4567."
+        );
+
         throw new Error(
-          "Escribe tu número de WhatsApp."
+          "Revisa tu número de WhatsApp."
         );
       }
 
@@ -705,54 +654,43 @@ export default function Home() {
             },
 
             body:
-              JSON.stringify(
-                {
-                  serviceAreaId:
-                    getServiceAreaId(),
+              JSON.stringify({
+                serviceAreaId:
+                  getServiceAreaId(),
 
-                  eventDate,
+                eventDate,
 
-                  startTime,
+                startTime,
 
-                  guests:
-                    Number(
-                      guests
-                    ),
+                guests:
+                  Number(
+                    guests
+                  ),
 
-                  hours:
-                    Number(
-                      hours
-                    ),
+                hours:
+                  Number(
+                    hours
+                  ),
 
-                  matchaBar,
+                matchaBar,
 
-                  extraBarista,
+                extraBarista,
 
-                  customerName,
+                customerName,
 
-                  email,
+                email,
 
-                  phone,
+                phone,
 
-                  eventType,
+                eventType,
 
-                  eventAddress,
-                }
-              ),
+                eventAddress,
+              }),
           }
         );
 
-      const text =
-        await response.text();
-
-      if (!text) {
-        throw new Error(
-          "No se recibió respuesta al apartar la fecha."
-        );
-      }
-
       const data =
-        JSON.parse(text);
+        await response.json();
 
       if (
         !response.ok ||
@@ -768,21 +706,14 @@ export default function Home() {
         data.hold
       );
 
-      setQuote(
-        {
-          serviceArea:
-            data.serviceArea,
+      setQuote({
+        serviceArea:
+          data.serviceArea,
 
-          quote:
-            data.quote,
-        }
-      );
+        quote:
+          data.quote,
+      });
     } catch (err) {
-      console.error(
-        "Hold:",
-        err
-      );
-
       setError(
         err.message
       );
@@ -794,317 +725,270 @@ export default function Home() {
   }
 
   // ============================================
+  // CHECKOUT
+  // ============================================
+
+  async function continueToPayment() {
+    try {
+      setCreatingCheckout(
+        true
+      );
+
+      setError(
+        ""
+      );
+
+      if (
+        !hold?.bookingId
+      ) {
+        throw new Error(
+          "No encontramos la reservación."
+        );
+      }
+
+      const response =
+        await fetch(
+          "/api/checkout",
+          {
+            method:
+              "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify({
+                bookingId:
+                  hold.bookingId,
+              }),
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
+        throw new Error(
+          data.error ||
+            "No fue posible iniciar el pago."
+        );
+      }
+
+      if (
+        data.holdExpiresAt
+      ) {
+        setHold(
+          (current) => ({
+            ...current,
+
+            expiresAt:
+              data.holdExpiresAt,
+          })
+        );
+      }
+
+      if (
+        data.alreadyPaid
+      ) {
+        throw new Error(
+          data.message ||
+            "Este evento ya está pagado."
+        );
+      }
+
+      if (
+        !data.checkoutUrl
+      ) {
+        throw new Error(
+          "Shopify no devolvió un enlace de pago."
+        );
+      }
+
+      window.location.assign(
+        data.checkoutUrl
+      );
+    } catch (err) {
+      setError(
+        err.message
+      );
+
+      console.error(
+        err
+      );
+    } finally {
+      setCreatingCheckout(
+        false
+      );
+    }
+  }
+
+  // ============================================
   // UI
   // ============================================
 
   return (
-    <main
-      style={
-        mainStyle
-      }
-    >
-      <div
-        style={
-          containerStyle
-        }
-      >
-        <div
-          style={
-            headerStyle
-          }
-        >
-          <div
-            style={
-              brandStyle
-            }
-          >
+    <main style={styles.main}>
+      <div style={styles.container}>
+        <div style={styles.header}>
+          <div style={styles.brand}>
             JAVA TIMES CAFFÉ
           </div>
 
-          <h1
-            style={
-              titleStyle
-            }
-          >
+          <h1 style={styles.title}>
             Java Coffee Cart
           </h1>
 
-          <p
-            style={
-              subtitleStyle
-            }
-          >
-            Cotiza, consulta disponibilidad
-            y aparta tu evento.
+          <p style={styles.subtitle}>
+            Cotiza, consulta disponibilidad y reserva tu evento.
           </p>
         </div>
 
-        <div
-          style={
-            cardStyle
-          }
-        >
-          {/* CIUDAD */}
-
-          <label
-            style={
-              labelStyle
-            }
-          >
+        <div style={styles.card}>
+          <FieldLabel>
             Ciudad del evento
-          </label>
+          </FieldLabel>
 
           <select
             value={
               serviceAreaId
             }
-
             disabled={
               loadingCities ||
               Boolean(hold)
             }
-
-            onChange={(
-              e
-            ) => {
+            onChange={(e) => {
               setServiceAreaId(
                 e.target.value
               );
 
               resetResults();
             }}
-
-            style={
-              inputStyle
-            }
+            style={styles.input}
           >
-            {loadingCities && (
-              <option value="">
-                Cargando...
-              </option>
-            )}
-
             {serviceAreas.map(
               (area) => (
                 <option
-                  key={
-                    area.id
-                  }
-
-                  value={
-                    area.id
-                  }
+                  key={area.id}
+                  value={area.id}
                 >
-                  {
-                    area.city
-                  }
-                  ,{" "}
-                  {
-                    area.state
-                  }
+                  {area.city},{" "}
+                  {area.state}
                 </option>
               )
             )}
           </select>
 
-          {/* FECHA */}
-
-          <label
-            style={
-              labelStyle
-            }
-          >
+          <FieldLabel>
             Fecha del evento
-          </label>
+          </FieldLabel>
 
           <input
             type="date"
-
-            value={
-              eventDate
-            }
-
+            value={eventDate}
             disabled={
               Boolean(hold)
             }
-
-            onChange={(
-              e
-            ) => {
+            onChange={(e) => {
               setEventDate(
                 e.target.value
               );
 
               resetResults();
             }}
-
-            style={
-              inputStyle
-            }
+            style={styles.input}
           />
 
-          {/* HORA */}
-
-          <label
-            style={
-              labelStyle
-            }
-          >
+          <FieldLabel>
             Hora de inicio
-          </label>
+          </FieldLabel>
 
           <select
-            value={
-              startTime
-            }
-
+            value={startTime}
             disabled={
               Boolean(hold)
             }
-
-            onChange={(
-              e
-            ) => {
+            onChange={(e) => {
               setStartTime(
                 e.target.value
               );
 
               resetResults();
             }}
-
-            style={
-              inputStyle
-            }
+            style={styles.input}
           >
             <option value="">
               Selecciona una hora
             </option>
 
-            <option value="08:00">
-              8:00 AM
-            </option>
-
-            <option value="09:00">
-              9:00 AM
-            </option>
-
-            <option value="10:00">
-              10:00 AM
-            </option>
-
-            <option value="11:00">
-              11:00 AM
-            </option>
-
-            <option value="12:00">
-              12:00 PM
-            </option>
-
-            <option value="13:00">
-              1:00 PM
-            </option>
-
-            <option value="14:00">
-              2:00 PM
-            </option>
-
-            <option value="15:00">
-              3:00 PM
-            </option>
-
-            <option value="16:00">
-              4:00 PM
-            </option>
-
-            <option value="17:00">
-              5:00 PM
-            </option>
-
-            <option value="18:00">
-              6:00 PM
-            </option>
-
-            <option value="19:00">
-              7:00 PM
-            </option>
-
-            <option value="20:00">
-              8:00 PM
-            </option>
+            {[
+              ["08:00", "8:00 AM"],
+              ["09:00", "9:00 AM"],
+              ["10:00", "10:00 AM"],
+              ["11:00", "11:00 AM"],
+              ["12:00", "12:00 PM"],
+              ["13:00", "1:00 PM"],
+              ["14:00", "2:00 PM"],
+              ["15:00", "3:00 PM"],
+              ["16:00", "4:00 PM"],
+              ["17:00", "5:00 PM"],
+              ["18:00", "6:00 PM"],
+              ["19:00", "7:00 PM"],
+              ["20:00", "8:00 PM"],
+            ].map(
+              ([value, label]) => (
+                <option
+                  key={value}
+                  value={value}
+                >
+                  {label}
+                </option>
+              )
+            )}
           </select>
 
-          {/* INVITADOS */}
-
-          <label
-            style={
-              labelStyle
-            }
-          >
+          <FieldLabel>
             Número de invitados
-          </label>
+          </FieldLabel>
 
           <input
             type="number"
-
             min="1"
-
-            value={
-              guests
-            }
-
+            value={guests}
             disabled={
               Boolean(hold)
             }
-
-            onChange={(
-              e
-            ) => {
+            onChange={(e) => {
               setGuests(
                 e.target.value
               );
 
-              setQuote(
-                null
-              );
+              setQuote(null);
             }}
-
-            style={
-              inputStyle
-            }
+            style={styles.input}
           />
 
-          {/* DURACIÓN */}
-
-          <label
-            style={
-              labelStyle
-            }
-          >
+          <FieldLabel>
             Duración
-          </label>
+          </FieldLabel>
 
           <select
-            value={
-              hours
-            }
-
+            value={hours}
             disabled={
               Boolean(hold)
             }
-
-            onChange={(
-              e
-            ) => {
+            onChange={(e) => {
               setHours(
                 e.target.value
               );
 
               resetResults();
             }}
-
-            style={
-              inputStyle
-            }
+            style={styles.input}
           >
             <option value="2">
               2 horas
@@ -1123,162 +1007,111 @@ export default function Home() {
             </option>
           </select>
 
-          {/* EXTRAS */}
-
-          <div
-            style={
-              extrasStyle
-            }
-          >
-            <label
-              style={
-                checkboxStyle
-              }
-            >
+          <div style={styles.extras}>
+            <label>
               <input
                 type="checkbox"
-
                 checked={
                   matchaBar
                 }
-
                 disabled={
                   Boolean(hold)
                 }
-
-                onChange={(
-                  e
-                ) => {
+                onChange={(e) => {
                   setMatchaBar(
                     e.target.checked
                   );
 
-                  setQuote(
-                    null
-                  );
+                  setQuote(null);
                 }}
-              />
-
+              />{" "}
               Matcha Bar
             </label>
 
-            <label
-              style={
-                checkboxStyle
-              }
-            >
+            <label>
               <input
                 type="checkbox"
-
                 checked={
                   extraBarista
                 }
-
                 disabled={
                   Boolean(hold)
                 }
-
-                onChange={(
-                  e
-                ) => {
+                onChange={(e) => {
                   setExtraBarista(
                     e.target.checked
                   );
 
-                  setQuote(
-                    null
-                  );
+                  setQuote(null);
                 }}
-              />
-
+              />{" "}
               Barista adicional
             </label>
           </div>
 
-          {/* DISPONIBILIDAD */}
-
           {!hold && (
-            <button
-              onClick={
-                checkAvailability
-              }
-
-              disabled={
-                checkingAvailability
-              }
-
-              style={
-                secondaryButtonStyle
-              }
-            >
-              {checkingAvailability
-                ? "Verificando..."
-                : "Verificar disponibilidad"}
-            </button>
-          )}
-
-          {availability?.available &&
-            !hold && (
-              <div
+            <>
+              <button
+                onClick={
+                  checkAvailability
+                }
+                disabled={
+                  checkingAvailability
+                }
                 style={
-                  successBoxStyle
+                  styles.secondaryButton
                 }
               >
-                <strong>
-                  ✓ Java Coffee Cart disponible
-                </strong>
+                {checkingAvailability
+                  ? "Verificando..."
+                  : "Verificar disponibilidad"}
+              </button>
 
-                <div>
-                  {formatDate(
-                    availability
-                      .event
-                      .date
-                  )}
+              {availability?.available && (
+                <div
+                  style={
+                    styles.success
+                  }
+                >
+                  <strong>
+                    ✓ Java Coffee Cart disponible
+                  </strong>
+
+                  <div>
+                    {formatDate(
+                      eventDate
+                    )}
+                  </div>
+
+                  <div>
+                    {formatTime(
+                      startTime
+                    )}
+                  </div>
                 </div>
+              )}
 
-                <div>
-                  {formatTime(
-                    availability
-                      .event
-                      .startTime
-                  )}
-                </div>
-              </div>
-            )}
-
-          {/* COTIZACIÓN */}
-
-          {!hold && (
-            <button
-              onClick={
-                calculateQuote
-              }
-
-              disabled={
-                loadingQuote
-              }
-
-              style={
-                primaryButtonStyle
-              }
-            >
-              {loadingQuote
-                ? "Calculando..."
-                : "Cotizar evento"}
-            </button>
+              <button
+                onClick={
+                  calculateQuote
+                }
+                disabled={
+                  loadingQuote
+                }
+                style={
+                  styles.primaryButton
+                }
+              >
+                {loadingQuote
+                  ? "Calculando..."
+                  : "Cotizar evento"}
+              </button>
+            </>
           )}
 
           {quote && (
-            <div
-              style={
-                quoteStyle
-              }
-            >
-              <div
-                style={
-                  smallLabelStyle
-                }
-              >
+            <div style={styles.quote}>
+              <div style={styles.small}>
                 TU EVENTO JAVA
               </div>
 
@@ -1302,198 +1135,174 @@ export default function Home() {
                 )}
               </div>
 
-              <div
-                style={{
-                  marginTop:
-                    "15px",
-                }}
-              >
-                {guests} invitados
-                {" · "}
+              <p>
+                {guests} invitados ·{" "}
                 {hours} horas
-              </div>
+              </p>
 
-              <div
-                style={
-                  totalLabelStyle
-                }
-              >
+              <div style={styles.muted}>
                 Total estimado
               </div>
 
-              <div
-                style={
-                  totalStyle
-                }
-              >
+              <div style={styles.total}>
                 {formatMoney(
-                  quote
-                    .quote
-                    .total
+                  quote.quote.total
                 )}
               </div>
 
-              <div
-                style={{
-                  marginTop:
-                    "15px",
-                }}
-              >
+              <p>
                 Anticipo:{" "}
                 <strong>
                   {formatMoney(
-                    quote
-                      .quote
-                      .deposit
+                    quote.quote.deposit
                   )}
                 </strong>
-              </div>
+              </p>
 
-              <div
-                style={
-                  mutedStyle
-                }
-              >
+              <div style={styles.muted}>
                 Saldo:{" "}
                 {formatMoney(
-                  quote
-                    .quote
-                    .balance
+                  quote.quote.balance
                 )}
               </div>
             </div>
           )}
-
-          {/* DATOS CLIENTE */}
 
           {availability?.available &&
             quote &&
             !hold && (
               <div
                 style={
-                  customerSectionStyle
+                  styles.customer
                 }
               >
                 <h2>
                   Aparta tu fecha
                 </h2>
 
-                <p
-                  style={
-                    mutedStyle
-                  }
-                >
-                  Completa tus datos.
-                  Apartaremos este horario
-                  durante 15 minutos.
-                </p>
-
-                <label
-                  style={
-                    labelStyle
-                  }
-                >
+                <FieldLabel>
                   Nombre completo
-                </label>
+                </FieldLabel>
 
                 <input
                   value={
                     customerName
                   }
-
-                  onChange={(
-                    e
-                  ) =>
+                  onChange={(e) =>
                     setCustomerName(
                       e.target.value
                     )
                   }
-
-                  style={
-                    inputStyle
-                  }
+                  style={styles.input}
                 />
 
-                <label
-                  style={
-                    labelStyle
-                  }
-                >
+                <FieldLabel>
                   Correo electrónico
-                </label>
+                </FieldLabel>
 
                 <input
                   type="email"
-
-                  value={
-                    email
-                  }
-
-                  onChange={(
-                    e
-                  ) =>
+                  value={email}
+                  onChange={(e) =>
                     setEmail(
                       e.target.value
                     )
                   }
-
-                  style={
-                    inputStyle
-                  }
+                  style={styles.input}
                 />
 
-                <label
-                  style={
-                    labelStyle
-                  }
-                >
+                <FieldLabel>
                   WhatsApp
-                </label>
+                </FieldLabel>
 
-                <input
-                  type="tel"
-
-                  value={
-                    phone
-                  }
-
-                  onChange={(
-                    e
-                  ) =>
-                    setPhone(
-                      e.target.value
-                    )
-                  }
-
+                <div
                   style={
-                    inputStyle
-                  }
-                />
-
-                <label
-                  style={
-                    labelStyle
+                    styles.phoneRow
                   }
                 >
+                  <div
+                    style={
+                      styles.countryCode
+                    }
+                  >
+                    🇲🇽 +52
+                  </div>
+
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    placeholder="871 123 4567"
+                    value={phone}
+                    onChange={(e) => {
+                      const formatted =
+                        formatMexicoPhoneInput(
+                          e.target.value
+                        );
+
+                      setPhone(
+                        formatted
+                      );
+
+                      if (
+                        !formatted ||
+                        isValidMexicoPhone(
+                          formatted
+                        )
+                      ) {
+                        setPhoneError(
+                          ""
+                        );
+                      }
+                    }}
+                    onBlur={() => {
+                      if (
+                        phone &&
+                        !isValidMexicoPhone(
+                          phone
+                        )
+                      ) {
+                        setPhoneError(
+                          "Ingresa los 10 dígitos de tu celular."
+                        );
+                      }
+                    }}
+                    style={
+                      styles.phoneInput
+                    }
+                  />
+                </div>
+
+                {phoneError && (
+                  <div
+                    style={
+                      styles.fieldError
+                    }
+                  >
+                    {phoneError}
+                  </div>
+                )}
+
+                <div
+                  style={
+                    styles.help
+                  }
+                >
+                  Lo guardaremos como
+                  +52 y tu número de 10 dígitos.
+                </div>
+
+                <FieldLabel>
                   Tipo de evento
-                </label>
+                </FieldLabel>
 
                 <select
-                  value={
-                    eventType
-                  }
-
-                  onChange={(
-                    e
-                  ) =>
+                  value={eventType}
+                  onChange={(e) =>
                     setEventType(
                       e.target.value
                     )
                   }
-
-                  style={
-                    inputStyle
-                  }
+                  style={styles.input}
                 >
                   <option value="">
                     Selecciona
@@ -1528,45 +1337,43 @@ export default function Home() {
                   </option>
                 </select>
 
-                <label
-                  style={
-                    labelStyle
-                  }
-                >
+                <FieldLabel>
                   Dirección del evento
-                </label>
+                </FieldLabel>
 
                 <input
                   value={
                     eventAddress
                   }
-
-                  onChange={(
-                    e
-                  ) =>
+                  placeholder="Calle, número, colonia..."
+                  onChange={(e) =>
                     setEventAddress(
                       e.target.value
                     )
                   }
-
-                  placeholder="Calle, número, colonia..."
-                  style={
-                    inputStyle
-                  }
+                  style={styles.input}
                 />
 
                 <button
                   onClick={
                     createHold
                   }
-
                   disabled={
-                    creatingHold
+                    creatingHold ||
+                    !isValidMexicoPhone(
+                      phone
+                    )
                   }
+                  style={{
+                    ...styles.reserveButton,
 
-                  style={
-                    reserveButtonStyle
-                  }
+                    opacity:
+                      isValidMexicoPhone(
+                        phone
+                      )
+                        ? 1
+                        : 0.55,
+                  }}
                 >
                   {creatingHold
                     ? "Apartando..."
@@ -1575,90 +1382,55 @@ export default function Home() {
               </div>
             )}
 
-          {/* HOLD ACTIVO */}
-
           {hold && (
-            <div
-              style={
-                holdBoxStyle
-              }
-            >
-              <div
-                style={
-                  holdTitleStyle
-                }
-              >
+            <div style={styles.hold}>
+              <h2>
                 ✓ Fecha apartada
-              </div>
+              </h2>
 
               {secondsRemaining >
               0 ? (
                 <>
-                  <p>
-                    Tu Coffee Cart está
-                    reservado temporalmente.
-                  </p>
-
-                  <div
-                    style={
-                      timerStyle
-                    }
-                  >
+                  <div style={styles.timer}>
                     {formatCountdown(
                       secondsRemaining
                     )}
                   </div>
 
-                  <div
-                    style={
-                      mutedStyle
-                    }
-                  >
-                    Tiempo restante para
-                    completar el pago.
-                  </div>
+                  <p style={styles.muted}>
+                    Tiempo restante para iniciar el pago.
+                  </p>
 
                   <button
+                    onClick={
+                      continueToPayment
+                    }
+                    disabled={
+                      creatingCheckout
+                    }
                     style={
-                      paymentButtonStyle
+                      styles.paymentButton
                     }
                   >
-                    Continuar al pago
+                    {creatingCheckout
+                      ? "Preparando Shopify..."
+                      : "Continuar al pago"}
                   </button>
 
-                  <div
-                    style={
-                      paymentNoticeStyle
-                    }
-                  >
-                    El botón de pago será
-                    conectado a Shopify en
-                    el siguiente paso.
+                  <div style={styles.help}>
+                    El cliente y su teléfono quedarán asociados en Shopify.
                   </div>
                 </>
               ) : (
-                <div
-                  style={
-                    errorBoxStyle
-                  }
-                >
-                  El tiempo de apartado
-                  terminó. Actualiza la
-                  página para consultar
-                  disponibilidad nuevamente.
+                <div style={styles.error}>
+                  El tiempo de apartado terminó.
                 </div>
               )}
             </div>
           )}
 
-          {/* ERROR */}
-
           {error && (
-            <div
-              style={
-                errorBoxStyle
-              }
-            >
+            <div style={styles.error}>
               {error}
             </div>
           )}
@@ -1668,420 +1440,460 @@ export default function Home() {
   );
 }
 
-// ============================================
-// ESTILOS
-// ============================================
+function FieldLabel({
+  children,
+}) {
+  return (
+    <label
+      style={{
+        display:
+          "block",
+
+        fontWeight:
+          500,
+      }}
+    >
+      {children}
+    </label>
+  );
+}
+
+const styles = {
+  main: {
+    minHeight:
+      "100vh",
+
+    background:
+      "#111",
+
+    color:
+      "#fff",
 
-const mainStyle = {
-  minHeight:
-    "100vh",
+    padding:
+      "50px 20px",
 
-  background:
-    "#111111",
+    fontFamily:
+      "Arial, sans-serif",
+  },
 
-  color:
-    "white",
+  container: {
+    maxWidth:
+      "700px",
 
-  padding:
-    "50px 20px",
+    margin:
+      "0 auto",
+  },
 
-  fontFamily:
-    "Arial, Helvetica, sans-serif",
-};
+  header: {
+    marginBottom:
+      "40px",
+  },
 
-const containerStyle = {
-  maxWidth:
-    "700px",
+  brand: {
+    fontSize:
+      "14px",
 
-  margin:
-    "0 auto",
-};
+    letterSpacing:
+      "2px",
+  },
 
-const headerStyle = {
-  marginBottom:
-    "40px",
-};
+  title: {
+    fontSize:
+      "42px",
 
-const brandStyle = {
-  fontSize:
-    "14px",
+    marginBottom:
+      "8px",
+  },
 
-  letterSpacing:
-    "2px",
+  subtitle: {
+    color:
+      "#bbb",
 
-  marginBottom:
-    "12px",
-};
+    fontSize:
+      "18px",
+  },
 
-const titleStyle = {
-  fontSize:
-    "42px",
+  card: {
+    background:
+      "#1c1c1c",
 
-  margin:
-    0,
-};
+    padding:
+      "30px",
 
-const subtitleStyle = {
-  color:
-    "#bbbbbb",
+    borderRadius:
+      "16px",
+  },
 
-  fontSize:
-    "18px",
+  input: {
+    width:
+      "100%",
 
-  lineHeight:
-    1.5,
-};
+    boxSizing:
+      "border-box",
 
-const cardStyle = {
-  background:
-    "#1c1c1c",
+    padding:
+      "14px",
 
-  padding:
-    "30px",
+    marginTop:
+      "8px",
 
-  borderRadius:
-    "16px",
-};
+    marginBottom:
+      "22px",
 
-const labelStyle = {
-  display:
-    "block",
+    background:
+      "#292929",
 
-  fontWeight:
-    "500",
-};
+    color:
+      "#fff",
 
-const inputStyle = {
-  width:
-    "100%",
+    border:
+      "1px solid #444",
 
-  boxSizing:
-    "border-box",
+    borderRadius:
+      "8px",
 
-  padding:
-    "14px",
+    fontSize:
+      "16px",
+  },
 
-  marginTop:
-    "8px",
+  extras: {
+    display:
+      "grid",
 
-  marginBottom:
-    "22px",
+    gap:
+      "14px",
 
-  background:
-    "#292929",
+    marginBottom:
+      "25px",
+  },
 
-  color:
-    "white",
+  secondaryButton: {
+    width:
+      "100%",
 
-  border:
-    "1px solid #444",
+    padding:
+      "16px",
 
-  borderRadius:
-    "8px",
+    background:
+      "#252525",
 
-  fontSize:
-    "16px",
-};
+    color:
+      "#fff",
 
-const extrasStyle = {
-  display:
-    "flex",
+    border:
+      "1px solid #666",
 
-  flexDirection:
-    "column",
+    borderRadius:
+      "9px",
 
-  gap:
-    "14px",
+    fontWeight:
+      "bold",
 
-  marginBottom:
-    "28px",
-};
+    cursor:
+      "pointer",
 
-const checkboxStyle = {
-  display:
-    "flex",
+    marginBottom:
+      "15px",
+  },
 
-  alignItems:
-    "center",
+  primaryButton: {
+    width:
+      "100%",
 
-  gap:
-    "10px",
-};
+    padding:
+      "17px",
 
-const primaryButtonStyle = {
-  width:
-    "100%",
+    background:
+      "#888",
 
-  padding:
-    "17px",
+    color:
+      "#fff",
 
-  marginTop:
-    "10px",
+    border:
+      0,
 
-  background:
-    "#808080",
+    borderRadius:
+      "9px",
 
-  color:
-    "white",
+    fontSize:
+      "17px",
 
-  border:
-    "none",
+    fontWeight:
+      "bold",
 
-  borderRadius:
-    "9px",
+    cursor:
+      "pointer",
+  },
 
-  fontSize:
-    "17px",
+  success: {
+    padding:
+      "16px",
 
-  fontWeight:
-    "bold",
+    marginBottom:
+      "18px",
 
-  cursor:
-    "pointer",
-};
+    background:
+      "#123f23",
 
-const secondaryButtonStyle = {
-  width:
-    "100%",
+    border:
+      "1px solid #24743c",
 
-  padding:
-    "16px",
+    borderRadius:
+      "8px",
 
-  background:
-    "#252525",
+    lineHeight:
+      1.6,
+  },
 
-  color:
-    "white",
+  quote: {
+    marginTop:
+      "30px",
 
-  border:
-    "1px solid #666",
+    paddingTop:
+      "30px",
 
-  borderRadius:
-    "9px",
+    borderTop:
+      "1px solid #444",
+  },
 
-  fontSize:
-    "16px",
+  small: {
+    color:
+      "#aaa",
 
-  fontWeight:
-    "bold",
+    fontSize:
+      "13px",
 
-  cursor:
-    "pointer",
+    letterSpacing:
+      "1.5px",
+  },
 
-  marginBottom:
-    "16px",
-};
+  total: {
+    fontSize:
+      "38px",
 
-const reserveButtonStyle = {
-  width:
-    "100%",
+    fontWeight:
+      "bold",
 
-  padding:
-    "18px",
+    marginTop:
+      "5px",
+  },
 
-  background:
-    "#ffffff",
+  muted: {
+    color:
+      "#aaa",
+  },
 
-  color:
-    "#111111",
+  customer: {
+    marginTop:
+      "35px",
 
-  border:
-    "none",
+    paddingTop:
+      "30px",
 
-  borderRadius:
-    "9px",
+    borderTop:
+      "1px solid #444",
+  },
 
-  fontSize:
-    "17px",
+  phoneRow: {
+    display:
+      "flex",
 
-  fontWeight:
-    "bold",
+    marginTop:
+      "8px",
 
-  cursor:
-    "pointer",
-};
+    marginBottom:
+      "6px",
+  },
 
-const paymentButtonStyle = {
-  width:
-    "100%",
+  countryCode: {
+    display:
+      "flex",
 
-  padding:
-    "18px",
+    alignItems:
+      "center",
 
-  marginTop:
-    "25px",
+    padding:
+      "0 14px",
 
-  background:
-    "#ffffff",
+    background:
+      "#222",
 
-  color:
-    "#111111",
+    border:
+      "1px solid #444",
 
-  border:
-    "none",
+    borderRight:
+      0,
 
-  borderRadius:
-    "9px",
+    borderRadius:
+      "8px 0 0 8px",
 
-  fontSize:
-    "18px",
+    whiteSpace:
+      "nowrap",
+  },
 
-  fontWeight:
-    "bold",
+  phoneInput: {
+    flex:
+      1,
 
-  cursor:
-    "pointer",
-};
+    minWidth:
+      0,
 
-const successBoxStyle = {
-  padding:
-    "16px",
+    padding:
+      "14px",
 
-  marginBottom:
-    "20px",
+    background:
+      "#292929",
 
-  background:
-    "#123f23",
+    color:
+      "#fff",
 
-  border:
-    "1px solid #24743c",
+    border:
+      "1px solid #444",
 
-  borderRadius:
-    "8px",
+    borderRadius:
+      "0 8px 8px 0",
 
-  lineHeight:
-    1.6,
-};
+    fontSize:
+      "16px",
 
-const quoteStyle = {
-  marginTop:
-    "30px",
+    boxSizing:
+      "border-box",
+  },
 
-  paddingTop:
-    "30px",
+  fieldError: {
+    color:
+      "#ff9999",
 
-  borderTop:
-    "1px solid #444",
-};
+    fontSize:
+      "14px",
 
-const smallLabelStyle = {
-  color:
-    "#aaaaaa",
+    marginBottom:
+      "6px",
+  },
 
-  fontSize:
-    "13px",
+  help: {
+    color:
+      "#999",
 
-  letterSpacing:
-    "1.5px",
-};
+    fontSize:
+      "13px",
 
-const totalLabelStyle = {
-  marginTop:
-    "30px",
+    lineHeight:
+      1.5,
 
-  color:
-    "#bbbbbb",
-};
+    marginBottom:
+      "20px",
+  },
 
-const totalStyle = {
-  fontSize:
-    "38px",
+  reserveButton: {
+    width:
+      "100%",
 
-  fontWeight:
-    "bold",
+    padding:
+      "18px",
 
-  marginTop:
-    "5px",
-};
+    background:
+      "#fff",
 
-const mutedStyle = {
-  color:
-    "#aaaaaa",
+    color:
+      "#111",
 
-  marginTop:
-    "7px",
+    border:
+      0,
 
-  lineHeight:
-    1.5,
-};
+    borderRadius:
+      "9px",
 
-const customerSectionStyle = {
-  marginTop:
-    "35px",
+    fontSize:
+      "17px",
 
-  paddingTop:
-    "30px",
+    fontWeight:
+      "bold",
 
-  borderTop:
-    "1px solid #444",
-};
+    cursor:
+      "pointer",
+  },
 
-const holdBoxStyle = {
-  marginTop:
-    "30px",
+  hold: {
+    marginTop:
+      "30px",
 
-  padding:
-    "25px",
+    padding:
+      "25px",
 
-  background:
-    "#172a1c",
+    textAlign:
+      "center",
 
-  border:
-    "1px solid #296b3a",
+    background:
+      "#172a1c",
 
-  borderRadius:
-    "12px",
+    border:
+      "1px solid #296b3a",
 
-  textAlign:
-    "center",
-};
+    borderRadius:
+      "12px",
+  },
 
-const holdTitleStyle = {
-  fontSize:
-    "22px",
+  timer: {
+    fontSize:
+      "48px",
 
-  fontWeight:
-    "bold",
-};
+    fontWeight:
+      "bold",
 
-const timerStyle = {
-  fontSize:
-    "48px",
+    margin:
+      "20px 0",
+  },
 
-  fontWeight:
-    "bold",
+  paymentButton: {
+    width:
+      "100%",
 
-  margin:
-    "20px 0 5px",
-};
+    padding:
+      "18px",
 
-const paymentNoticeStyle = {
-  marginTop:
-    "15px",
+    background:
+      "#fff",
 
-  color:
-    "#aaaaaa",
+    color:
+      "#111",
 
-  fontSize:
-    "13px",
-};
+    border:
+      0,
 
-const errorBoxStyle = {
-  marginTop:
-    "20px",
+    borderRadius:
+      "9px",
 
-  padding:
-    "15px",
+    fontSize:
+      "18px",
 
-  background:
-    "#381818",
+    fontWeight:
+      "bold",
 
-  border:
-    "1px solid #682727",
+    cursor:
+      "pointer",
 
-  borderRadius:
-    "8px",
+    marginTop:
+      "20px",
 
-  lineHeight:
-    1.5,
+    marginBottom:
+      "15px",
+  },
+
+  error: {
+    marginTop:
+      "20px",
+
+    padding:
+      "15px",
+
+    background:
+      "#381818",
+
+    border:
+      "1px solid #682727",
+
+    borderRadius:
+      "8px",
+  },
 };
