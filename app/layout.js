@@ -1,6 +1,7 @@
 import { Syne } from "next/font/google";
 import "./globals.css";
 import "./apple-light.css";
+import EventDateTimeEnhancer from "./EventDateTimeEnhancer";
 
 const syne = Syne({
   subsets: ["latin"],
@@ -17,7 +18,10 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="es" className={syne.variable}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <EventDateTimeEnhancer />
+      </body>
     </html>
   );
 }
