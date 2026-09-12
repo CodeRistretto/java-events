@@ -23,7 +23,7 @@ export async function POST(request) {
 
     const attribution = normalizeAttribution(body.attribution);
     const eventId = isPaidEventSeed
-      ? "java-deposit-catalog-seed-v1"
+      ? "java-deposit-custom-conversion-seed-v2"
       : String(body.eventId || "").slice(0, 200);
 
     if (!eventId || !attribution.client_session_id) {
