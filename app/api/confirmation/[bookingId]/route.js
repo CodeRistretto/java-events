@@ -1,10 +1,44 @@
 import { getEventFinancialSummary } from "@/lib/eventPayments";
+import { shopifyGraphQL } from "@/lib/shopify";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
 
 function centsToMoney(cents) {
   return Number(cents || 0) / 100;
+}
+
+async function pendingDepositCheckout(booking) {
+  if (
+    !booking.shopify_draft_order_id ||
+    !["HOLD", "PAYMENT_PENDING"].includes(booking.status)
+  ) {
+    return null;
+  }
+
+  try {
+    const data = await shopifyGraphQL(
+      `query PendingEventDeposit($id: ID!) {
+        draftOrder(id: $id) {
+          id
+          invoiceUrl
+          status
+          order { id }
+        }
+      }`,
+      { id: booking.shopify_draft_order_id }
+    );
+
+    const draft = data?.draftOrder;
+    if (!draft?.invoiceUrl || draft?.order?.id) return null;
+    return draft.invoiceUrl;
+  } catch (error) {
+    console.error("Could not load pending event checkout", {
+      bookingId: booking.id,
+      error: error.message,
+    });
+    return null;
+  }
 }
 
 export async function GET(request, context) {
@@ -45,6 +79,7 @@ export async function GET(request, context) {
         deposit_cents,
         balance_cents,
         pricing_snapshot,
+        shopify_draft_order_id,
         shopify_order_id,
         shopify_balance_order_id,
         created_at,
@@ -62,24 +97,26 @@ export async function GET(request, context) {
       );
     }
 
-    const [{ data: items, error: itemsError }, financial] = await Promise.all([
-      supabaseAdmin
-        .from("event_order_items")
-        .select(`
-          id,
-          item_type,
-          item_code,
-          item_name,
-          pricing_type,
-          quantity,
-          unit_price_cents,
-          line_total_cents,
-          created_at
-        `)
-        .eq("booking_id", bookingId)
-        .order("created_at", { ascending: true }),
-      getEventFinancialSummary(booking),
-    ]);
+    const [{ data: items, error: itemsError }, financial, depositCheckoutUrl] =
+      await Promise.all([
+        supabaseAdmin
+          .from("event_order_items")
+          .select(`
+            id,
+            item_type,
+            item_code,
+            item_name,
+            pricing_type,
+            quantity,
+            unit_price_cents,
+            line_total_cents,
+            created_at
+          `)
+          .eq("booking_id", bookingId)
+          .order("created_at", { ascending: true }),
+        getEventFinancialSummary(booking),
+        pendingDepositCheckout(booking),
+      ]);
 
     if (itemsError) throw itemsError;
 
@@ -151,6 +188,7 @@ export async function GET(request, context) {
         fullyPaid: financial.summary.fullyPaid,
         depositSubtotal,
         depositVat,
+        depositCheckoutUrl,
         shopifyOrderId: booking.shopify_order_id,
         shopifyBalanceOrderId: booking.shopify_balance_order_id,
         confirmedAt: booking.confirmed_at,
