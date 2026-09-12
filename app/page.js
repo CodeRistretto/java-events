@@ -160,7 +160,7 @@ function itemCalculation(item) {
     return `${item.quantity} unidad(es) × ${money(item.unitPrice)}`;
   }
   if (item.code === "SERVICE_AREA_TRANSPORT") {
-    return "Cargo fijo por traslado, ida y vuelta";
+    return "Cargo fijo por traslado, ida y vuelta · IVA incluido";
   }
   if (item.pricingType === "PER_EVENT") return "Precio fijo por evento";
   return "";
@@ -817,7 +817,7 @@ export default function Home() {
                     <option key={area.id} value={area.id}>
                       {area.city}, {area.state}
                       {Number(area.transport_fee_cents || 0) > 0
-                        ? ` · traslado ${money(Number(area.transport_fee_cents) / 100)} + IVA`
+                        ? ` · traslado ${money(Number(area.transport_fee_cents) / 100)} IVA incluido`
                         : " · traslado incluido"}
                     </option>
                   ))}
@@ -839,7 +839,7 @@ export default function Home() {
                         {Number(selectedArea.transport_fee_cents || 0) > 0
                           ? `Traslado a ${selectedArea.city}: ${money(
                               Number(selectedArea.transport_fee_cents) / 100
-                            )} + IVA`
+                            )} IVA incluido`
                           : `Traslado a ${selectedArea.city} incluido`}
                       </strong>
                       <small>
@@ -1609,7 +1609,9 @@ function QuoteCard({ quote, selectedArea, guestCount, startTime, endTime, vatPer
           >
             <div className="summary-row">
               <span>{itemHumanLabel(item)}</span>
-              <strong>{money(item.lineTotal)}</strong>
+              <strong>
+                {money(item.vatInclusiveLineTotal ?? item.lineTotal)}
+              </strong>
             </div>
             <div className="caption" style={{ marginTop: 4 }}>
               {itemCalculation(item)}
