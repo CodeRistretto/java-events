@@ -64,16 +64,20 @@ function syncTimesFromDom(startRef, endRef) {
   if (end) endRef.current = end;
 }
 
+function scheduleSignature(start, end) {
+  return start && end ? `${start}|${end}` : null;
+}
+
 function hideManualExtraHourCard() {
   const titles = Array.from(document.querySelectorAll(".check-title"));
 
   for (const title of titles) {
     const text = String(title.textContent || "").trim().toLowerCase();
-    if (
-      text === "additional hour" ||
-      text === "hora adicional" ||
-      text === "horas adicionales"
-    ) {
+    const looksLikeExtraHour =
+      (text.includes("additional") && text.includes("hour")) ||
+      (text.includes("hora") && text.includes("adicional"));
+
+    if (looksLikeExtraHour) {
       const card = title.closest(".check-card");
       if (card) card.style.display = "none";
     }
@@ -92,6 +96,7 @@ export default function EventDurationGuard() {
   const bypassRef = useRef(false);
   const startRef = useRef("16:00");
   const endRef = useRef("18:00");
+  const lastQuotedSignatureRef = useRef(null);
 
   useEffect(() => {
     if (pathname !== "/") return;
@@ -135,6 +140,63 @@ export default function EventDurationGuard() {
   useEffect(() => {
     if (pathname !== "/") return;
 
+    function openExtraHoursModal({ event, button, target, selectedTime, startTime, endTime }) {
+      const startMinutes = minutesFromTime(startTime);
+      const endMinutes = minutesFromTime(endTime);
+
+      if (
+        startMinutes === null ||
+        endMinutes === null ||
+        endMinutes <= startMinutes
+      ) {
+        return false;
+      }
+
+      const duration = (endMinutes - startMinutes) / 60;
+      const extraHours = Math.max(
+        0,
+        Math.ceil(duration - config.includedHours - 0.000001)
+      );
+
+      if (extraHours <= 0) return false;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (!config.extraHourCents) {
+        setPending({
+          unavailable: true,
+          button,
+          target,
+          duration,
+          extraHours,
+          selectedTime,
+          startTime,
+          endTime,
+        });
+        return true;
+      }
+
+      const subtotalCents = extraHours * config.extraHourCents;
+      const vatCents = Math.round((subtotalCents * config.vatBps) / 10000);
+
+      setPending({
+        unavailable: false,
+        button,
+        target,
+        duration,
+        extraHours,
+        selectedTime,
+        startTime,
+        endTime,
+        subtotalCents,
+        vatCents,
+        totalCents: subtotalCents + vatCents,
+      });
+
+      return true;
+    }
+
     function handleScheduleClick(event) {
       const button = event.target.closest?.(".java-time-slots button");
       if (!button) return;
@@ -151,59 +213,57 @@ export default function EventDurationGuard() {
       const slotIndex = buttons.indexOf(button);
       if (slotIndex < 0) return;
 
+      syncTimesFromDom(startRef, endRef);
+
       const selectedMinutes = SLOT_START_MINUTES + slotIndex * SLOT_STEP_MINUTES;
       const selectedTime = timeFromMinutes(selectedMinutes);
 
       if (activeIndex === 0) {
-        startRef.current = selectedTime;
-        setTimeout(() => syncTimesFromDom(startRef, endRef), 0);
+        const currentEndMinutes = minutesFromTime(endRef.current);
+
+        // If the selected start is after the old end, the React picker will
+        // automatically move the end to +2h. That path never needs an extra fee.
+        if (currentEndMinutes === null || currentEndMinutes <= selectedMinutes) {
+          startRef.current = selectedTime;
+          lastQuotedSignatureRef.current = null;
+          setTimeout(() => syncTimesFromDom(startRef, endRef), 0);
+          return;
+        }
+
+        const blocked = openExtraHoursModal({
+          event,
+          button,
+          target: "start",
+          selectedTime,
+          startTime: selectedTime,
+          endTime: endRef.current,
+        });
+
+        if (!blocked) {
+          startRef.current = selectedTime;
+          lastQuotedSignatureRef.current = null;
+        }
         return;
       }
 
       if (activeIndex !== 1) return;
 
-      syncTimesFromDom(startRef, endRef);
       const startMinutes = minutesFromTime(startRef.current);
       if (startMinutes === null || selectedMinutes <= startMinutes) return;
 
-      const duration = (selectedMinutes - startMinutes) / 60;
-      const extraHours = Math.max(
-        0,
-        Math.ceil(duration - config.includedHours - 0.000001)
-      );
-
-      if (extraHours <= 0) {
-        endRef.current = selectedTime;
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-
-      if (!config.extraHourCents) {
-        setPending({
-          unavailable: true,
-          button,
-          duration,
-          extraHours,
-          selectedTime,
-        });
-        return;
-      }
-
-      const subtotalCents = extraHours * config.extraHourCents;
-      const vatCents = Math.round((subtotalCents * config.vatBps) / 10000);
-
-      setPending({
-        unavailable: false,
+      const blocked = openExtraHoursModal({
+        event,
         button,
-        duration,
-        extraHours,
+        target: "end",
         selectedTime,
-        subtotalCents,
-        vatCents,
-        totalCents: subtotalCents + vatCents,
+        startTime: startRef.current,
+        endTime: selectedTime,
       });
+
+      if (!blocked) {
+        endRef.current = selectedTime;
+        lastQuotedSignatureRef.current = null;
+      }
     }
 
     document.addEventListener("click", handleScheduleClick, true);
@@ -217,23 +277,56 @@ export default function EventDurationGuard() {
 
     window.fetch = async (input, init = {}) => {
       const url = typeof input === "string" ? input : input?.url || "";
+      const method = init?.method?.toUpperCase() || "GET";
 
-      if (url.includes("/api/quote") && init?.method?.toUpperCase() === "POST") {
+      if (url.includes("/api/quote") && method === "POST") {
         syncTimesFromDom(startRef, endRef);
 
-        if (typeof init.body === "string") {
-          try {
-            const body = JSON.parse(init.body);
-            const start = minutesFromTime(startRef.current);
-            const end = minutesFromTime(endRef.current);
+        const start = minutesFromTime(startRef.current);
+        const end = minutesFromTime(endRef.current);
+        let quoteSignature = null;
 
-            if (start !== null && end !== null && end > start) {
+        if (start !== null && end !== null && end > start) {
+          quoteSignature = scheduleSignature(startRef.current, endRef.current);
+
+          if (typeof init.body === "string") {
+            try {
+              const body = JSON.parse(init.body);
               body.startTime = startRef.current;
               body.endTime = endRef.current;
               body.durationHours = (end - start) / 60;
               init = { ...init, body: JSON.stringify(body) };
+            } catch {}
+          }
+        }
+
+        const response = await originalFetch(input, init);
+        if (response.ok && quoteSignature) {
+          lastQuotedSignatureRef.current = quoteSignature;
+        }
+        return response;
+      }
+
+      if (url.includes("/api/hold") && method === "POST") {
+        syncTimesFromDom(startRef, endRef);
+        const currentSignature = scheduleSignature(startRef.current, endRef.current);
+
+        if (
+          !currentSignature ||
+          !lastQuotedSignatureRef.current ||
+          currentSignature !== lastQuotedSignatureRef.current
+        ) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error:
+                "El horario cambió después de la última cotización. Vuelve a presionar ‘Ver precio de mi evento’ para actualizar el total antes de apartar la fecha.",
+            }),
+            {
+              status: 409,
+              headers: { "Content-Type": "application/json" },
             }
-          } catch {}
+          );
         }
       }
 
@@ -253,7 +346,11 @@ export default function EventDurationGuard() {
 
   function accept() {
     if (pending.unavailable || !pending.button) return;
-    endRef.current = pending.selectedTime;
+
+    if (pending.target === "start") startRef.current = pending.selectedTime;
+    else endRef.current = pending.selectedTime;
+
+    lastQuotedSignatureRef.current = null;
     const button = pending.button;
     setPending(null);
     bypassRef.current = true;
@@ -307,8 +404,9 @@ export default function EventDurationGuard() {
             </div>
 
             <div className="java-hours-notice">
-              Si continúas, este cargo se agregará automáticamente a la cotización
-              y también será validado nuevamente antes de crear la reserva.
+              Al aceptar cambia el horario. Antes de apartar la fecha tendrás que
+              recalcular la cotización para que el total muestre correctamente las
+              horas adicionales.
             </div>
           </>
         )}
