@@ -77,35 +77,26 @@ export default function AdminLayout({ children }) {
               flexWrap: "wrap",
             }}
           >
-            <Link href="/admin" style={linkStyle}>
-              Admin
-            </Link>
-
-            <Link
-              href="/admin/events"
-              style={{
-                ...linkStyle,
-                borderColor: "rgba(240,90,34,.25)",
-                background: "#fff7f2",
-              }}
-            >
-              Calendar & Events
-            </Link>
-
-            <Link
-              href="/admin/payments"
-              style={{
-                ...linkStyle,
-                borderColor: "rgba(240,90,34,.25)",
-                background: "#fff7f2",
-              }}
-            >
-              Payments
-            </Link>
-
-            <Link href="/" style={linkStyle}>
-              Cotizador
-            </Link>
+            <Link href="/admin" style={linkStyle}>Admin</Link>
+            <Link href="/admin/events" style={{ ...linkStyle, borderColor: "rgba(240,90,34,.25)", background: "#fff7f2" }}>Calendar & Events</Link>
+            <Link href="/admin/payments" style={{ ...linkStyle, borderColor: "rgba(240,90,34,.25)", background: "#fff7f2" }}>Payments</Link>
+            <Link href="/admin/service" style={{ ...linkStyle, borderColor: "rgba(240,90,34,.25)", background: "#fff7f2" }}>Service & Terms</Link>
+            <Link href="/" style={linkStyle}>Cotizador</Link>
+            <form action="/api/admin/logout" method="post" style={{ margin: 0 }}>
+              <button
+                type="submit"
+                style={{
+                  ...linkStyle,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  color: "#9f1522",
+                  background: "#fff7f7",
+                  borderColor: "rgba(215,0,21,.15)",
+                }}
+              >
+                Logout
+              </button>
+            </form>
           </div>
         </div>
       </nav>
