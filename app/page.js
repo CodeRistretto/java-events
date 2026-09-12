@@ -6,27 +6,75 @@ function money(value) {
   return new Intl.NumberFormat("es-MX", {
     style: "currency",
     currency: "MXN",
+    minimumFractionDigits: 2,
   }).format(Number(value || 0));
+}
+
+function pad(value) {
+  return String(value).padStart(2, "0");
+}
+
+function isoDate(date) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function parseDate(value) {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day, 12, 0, 0);
+}
+
+function dateLabel(value) {
+  const date = parseDate(value);
+  if (!date) return "Selecciona una fecha";
+
+  return new Intl.DateTimeFormat("es-MX", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+}
+
+function timeLabel(value) {
+  if (!value) return "—";
+  const [hour, minute] = String(value).split(":").map(Number);
+
+  return new Intl.DateTimeFormat("es-MX", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(2000, 0, 1, hour, minute));
+}
+
+function minutesFromTime(value) {
+  if (!value) return 0;
+  const [hour, minute] = value.split(":").map(Number);
+  return hour * 60 + minute;
+}
+
+function timeFromMinutes(value) {
+  const safe = Math.max(0, Math.min(23 * 60 + 30, value));
+  return `${pad(Math.floor(safe / 60))}:${pad(safe % 60)}`;
 }
 
 function formatCountdown(seconds) {
   if (seconds === null) return "15:00";
   const safe = Math.max(0, seconds);
-  return `${String(Math.floor(safe / 60)).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
+  return `${pad(Math.floor(safe / 60))}:${pad(safe % 60)}`;
 }
 
 function durationHours(start, end) {
   if (!start || !end) return 0;
-  const [sh, sm] = start.split(":").map(Number);
-  const [eh, em] = end.split(":").map(Number);
-  const startMinutes = sh * 60 + sm;
-  const endMinutes = eh * 60 + em;
+  const startMinutes = minutesFromTime(start);
+  const endMinutes = minutesFromTime(end);
   if (endMinutes <= startMinutes) return 0;
   return (endMinutes - startMinutes) / 60;
 }
 
 function addOnPriceLabel(addOn) {
   const price = money(Number(addOn.unit_price_cents || 0) / 100);
+
   switch (addOn.pricing_type) {
     case "PER_GUEST":
       return `${price} por invitado`;
@@ -45,7 +93,8 @@ function addOnDescription(addOn) {
   if (addOn.description?.trim()) return addOn.description;
 
   const descriptions = {
-    COLD_BEVERAGES: "Agrega servicio de bebidas frías para todos los invitados contratados.",
+    COLD_BEVERAGES:
+      "Agrega servicio de bebidas frías para todos los invitados contratados.",
     FRAPPES: "Agrega frappés al servicio para todos los invitados contratados.",
     MATCHA_CHAI: "Agrega opciones de matcha y chai al servicio del evento.",
     DECAF: "Agrega opción de café descafeinado al servicio.",
@@ -57,7 +106,8 @@ function addOnDescription(addOn) {
     PERSONALIZED_CUPS: "Agrega vasos personalizados para los invitados contratados.",
     PERSONALIZED_MENU: "Agrega un menú personalizado para tu evento.",
     SPECIAL_GLASSWARE: "Agrega cristalería especial al servicio.",
-    ADDITIONAL_CART: "Solicita un Coffee Cart adicional. La disponibilidad será validada por Java.",
+    ADDITIONAL_CART:
+      "Solicita un Coffee Cart adicional. La disponibilidad será validada por Java.",
     ADDITIONAL_BARISTA: "Agrega personal adicional al servicio del evento.",
     ADDITIONAL_HOUR: "Extiende el servicio por una o más horas adicionales.",
     TRANSPORTATION: "Cargo de transporte cuando corresponda a la zona del evento.",
@@ -91,11 +141,34 @@ function itemHumanLabel(item) {
 
 function itemCalculation(item) {
   if (!item) return "";
-  if (item.pricingType === "PER_GUEST") return `${item.quantity} invitados × ${money(item.unitPrice)}`;
-  if (item.pricingType === "PER_HOUR") return `${item.quantity} hora(s) × ${money(item.unitPrice)}`;
-  if (item.pricingType === "PER_UNIT") return `${item.quantity} unidad(es) × ${money(item.unitPrice)}`;
+  if (item.pricingType === "PER_GUEST") {
+    return `${item.quantity} invitados × ${money(item.unitPrice)}`;
+  }
+  if (item.pricingType === "PER_HOUR") {
+    return `${item.quantity} hora(s) × ${money(item.unitPrice)}`;
+  }
+  if (item.pricingType === "PER_UNIT") {
+    return `${item.quantity} unidad(es) × ${money(item.unitPrice)}`;
+  }
   if (item.pricingType === "PER_EVENT") return "Precio fijo por evento";
   return "";
+}
+
+const TIME_SLOTS = Array.from({ length: 36 }, (_, index) =>
+  timeFromMinutes(6 * 60 + index * 30)
+);
+
+function buildCalendar(monthDate) {
+  const first = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1, 12);
+  const start = new Date(first);
+  const offset = (first.getDay() + 6) % 7;
+  start.setDate(first.getDate() - offset);
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return date;
+  });
 }
 
 export default function Home() {
@@ -266,7 +339,7 @@ export default function Home() {
       setSuccess("");
 
       if (!form.serviceAreaId) throw new Error("Selecciona una ciudad.");
-      if (!form.eventDate) throw new Error("Selecciona una fecha.");
+      if (!form.eventDate) throw new Error("Selecciona una fecha en el calendario.");
 
       const response = await fetch("/api/availability", {
         method: "POST",
@@ -376,9 +449,7 @@ export default function Home() {
       );
     }
 
-    const hours = durationHours(form.startTime, form.endTime);
-
-    if (hours <= 0) {
+    if (durationHours(form.startTime, form.endTime) <= 0) {
       throw new Error("La hora de término debe ser posterior a la hora de inicio.");
     }
   }
@@ -404,11 +475,7 @@ export default function Home() {
           durationHours: hours,
           setupAccessTime: setupAccessIso,
           elevator:
-            form.elevator === "yes"
-              ? true
-              : form.elevator === "no"
-              ? false
-              : null,
+            form.elevator === "yes" ? true : form.elevator === "no" ? false : null,
           potableWater:
             form.potableWater === "yes"
               ? true
@@ -479,8 +546,7 @@ export default function Home() {
         throw new Error(data.error || "No fue posible iniciar el pago.");
       }
 
-      const confirmationUrl =
-        data.confirmationUrl || `/confirmation/${hold.bookingId}`;
+      const confirmationUrl = data.confirmationUrl || `/confirmation/${hold.bookingId}`;
 
       if (data.alreadyPaid) {
         if (paymentWindow && !paymentWindow.closed) paymentWindow.close();
@@ -567,9 +633,7 @@ export default function Home() {
     return (
       <main className="app-shell">
         <div className="container" style={{ paddingTop: 80 }}>
-          <div className="panel form-section">
-            {error || "Cargando Java Events..."}
-          </div>
+          <div className="panel form-section">{error || "Cargando Java Events..."}</div>
         </div>
       </main>
     );
@@ -579,7 +643,6 @@ export default function Home() {
     <main className="app-shell">
       <section className="hero">
         <div className="hero-bg" />
-
         <div className="container hero-inner">
           <div className="eyebrow">
             <span className="eyebrow-dot" />
@@ -591,13 +654,11 @@ export default function Home() {
               <h1 className="hero-title">
                 Lleva Java Times Caffé <span>a tu evento</span>
               </h1>
-
               <p className="hero-subtitle">
                 Reserva un Java Coffee Cart completo para tu evento. Tú eliges
                 fecha, invitados y servicios. Nosotros te mostramos el precio
                 total antes de que pagues.
               </p>
-
               <div className="hero-pills">
                 <div className="hero-pill">Cotización clara</div>
                 <div className="hero-pill">Fecha reservada</div>
@@ -608,37 +669,19 @@ export default function Home() {
 
             <div className="hero-card">
               <div className="hero-card-label">Lo que estás contratando</div>
-
               <h2 className="hero-card-title">
                 Un servicio completo de Coffee Cart para un evento
               </h2>
-
               <p>
                 No estás comprando cafés individuales. Estás contratando el
                 Coffee Cart, equipo, montaje, personal y servicio de bebidas
                 para el número de invitados seleccionado.
               </p>
-
               <div className="hero-micro-grid">
-                <div className="micro-box">
-                  <div className="micro-kicker">Hoy</div>
-                  <div className="micro-value">Pagas anticipo</div>
-                </div>
-
-                <div className="micro-box">
-                  <div className="micro-kicker">Después</div>
-                  <div className="micro-value">Liquidas saldo</div>
-                </div>
-
-                <div className="micro-box">
-                  <div className="micro-kicker">Precio</div>
-                  <div className="micro-value">IVA desglosado</div>
-                </div>
-
-                <div className="micro-box">
-                  <div className="micro-kicker">Reserva</div>
-                  <div className="micro-value">Un evento</div>
-                </div>
+                <Micro label="Hoy" value="Pagas anticipo" />
+                <Micro label="Después" value="Liquidas saldo" />
+                <Micro label="Precio" value="IVA desglosado" />
+                <Micro label="Reserva" value="Un evento" />
               </div>
             </div>
           </div>
@@ -658,10 +701,7 @@ export default function Home() {
           <div className="form-section">
             <div className="quote-card" style={{ marginBottom: 28 }}>
               <div className="section-kicker">Antes de empezar</div>
-              <h3 style={{ marginTop: 8, marginBottom: 12 }}>
-                Así funciona tu reserva
-              </h3>
-
+              <h3 style={{ marginTop: 8, marginBottom: 12 }}>Así funciona tu reserva</h3>
               <div style={{ display: "grid", gap: 12 }}>
                 <ExplainerStep
                   number="1"
@@ -688,19 +728,14 @@ export default function Home() {
                 <ExplainerStep
                   number="5"
                   title="Aparta tu fecha"
-                  text={`Al continuar se reserva temporalmente el Coffee Cart durante ${holdMinutes} minutos. Hoy pagarás el anticipo de ${depositPercent.toFixed(
+                  text={`La fecha se aparta temporalmente durante ${holdMinutes} minutos. Hoy pagarás el anticipo de ${depositPercent.toFixed(
                     0
-                  )}% configurado para el evento; el saldo restante no se cobra hoy.`}
+                  )}%; el saldo restante no se cobra hoy.`}
                 />
               </div>
             </div>
 
-            <div className="section-title">
-              <div>
-                <div className="section-kicker">1 · Tu evento</div>
-                <h3>¿Dónde y cuándo será?</h3>
-              </div>
-            </div>
+            <SectionTitle kicker="1 · Tu evento" title="¿Dónde y cuándo será?" />
 
             <div className="form-grid">
               <div className="field full">
@@ -717,7 +752,6 @@ export default function Home() {
                   ))}
                   <option value="OTHER">Otra ciudad</option>
                 </select>
-
                 <small className="caption">
                   Sólo puedes pagar eventos dentro de una ciudad con cobertura activa.
                 </small>
@@ -725,112 +759,24 @@ export default function Home() {
             </div>
 
             {form.serviceAreaId === "OTHER" ? (
-              <div className="quote-card">
-                <h3>Quiero Java Coffee Cart en otra ciudad</h3>
-                <p className="caption">
-                  Todavía no podemos cobrarte un evento fuera de las zonas
-                  activas, pero podemos guardar tu solicitud para expansión.
-                </p>
-
-                <div className="form-grid">
-                  <TextField
-                    label="Ciudad"
-                    value={lead.city}
-                    onChange={(value) => setLead({ ...lead, city: value })}
-                  />
-                  <TextField
-                    label="Estado"
-                    value={lead.state}
-                    onChange={(value) => setLead({ ...lead, state: value })}
-                  />
-                  <TextField
-                    label="Tu nombre"
-                    value={lead.customerName}
-                    onChange={(value) =>
-                      setLead({ ...lead, customerName: value })
-                    }
-                  />
-                  <TextField
-                    label="Correo"
-                    value={lead.email}
-                    onChange={(value) => setLead({ ...lead, email: value })}
-                  />
-                  <TextField
-                    label="Teléfono"
-                    value={lead.phone}
-                    onChange={(value) => setLead({ ...lead, phone: value })}
-                  />
-                  <TextField
-                    label="Tipo de evento"
-                    value={lead.eventType}
-                    onChange={(value) =>
-                      setLead({ ...lead, eventType: value })
-                    }
-                  />
-
-                  <div className="field">
-                    <label className="label">Fecha estimada</label>
-                    <input
-                      className="input"
-                      type="date"
-                      value={lead.expectedDate}
-                      onChange={(e) =>
-                        setLead({ ...lead, expectedDate: e.target.value })
-                      }
-                    />
-                  </div>
-
-                  <div className="field">
-                    <label className="label">Invitados estimados</label>
-                    <input
-                      className="input"
-                      type="number"
-                      min="1"
-                      value={lead.estimatedGuests}
-                      onChange={(e) =>
-                        setLead({
-                          ...lead,
-                          estimatedGuests: Number(e.target.value),
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-
-                <label className="check-card" style={{ marginTop: 15 }}>
-                  <input
-                    type="checkbox"
-                    checked={lead.marketingConsent}
-                    onChange={(e) =>
-                      setLead({ ...lead, marketingConsent: e.target.checked })
-                    }
-                  />
-                  <div>
-                    <div className="check-title">
-                      Quiero recibir noticias cuando Java llegue a mi ciudad
-                    </div>
-                  </div>
-                </label>
-
-                <div className="action-row">
-                  <button className="button button-primary" onClick={submitLead}>
-                    {busy === "lead" ? "Guardando..." : "Enviar solicitud"}
-                  </button>
-                </div>
-              </div>
+              <UnsupportedCityLead
+                lead={lead}
+                setLead={setLead}
+                busy={busy}
+                submitLead={submitLead}
+              />
             ) : (
               <>
-                <div className="form-grid">
-                  <div className="field">
-                    <label className="label">Fecha del evento</label>
-                    <input
-                      className="input"
-                      type="date"
-                      value={form.eventDate}
-                      onChange={(e) => update("eventDate", e.target.value)}
-                    />
-                  </div>
+                <EventSchedulePicker
+                  eventDate={form.eventDate}
+                  startTime={form.startTime}
+                  endTime={form.endTime}
+                  onDate={(value) => update("eventDate", value)}
+                  onStart={(value) => update("startTime", value)}
+                  onEnd={(value) => update("endTime", value)}
+                />
 
+                <div className="form-grid">
                   <TextField
                     label="Tipo de evento"
                     value={form.eventType}
@@ -839,36 +785,11 @@ export default function Home() {
                   />
 
                   <div className="field">
-                    <label className="label">Hora de inicio</label>
-                    <input
-                      className="input"
-                      type="time"
-                      value={form.startTime}
-                      onChange={(e) => update("startTime", e.target.value)}
-                    />
-                  </div>
-
-                  <div className="field">
-                    <label className="label">Hora de término</label>
-                    <input
-                      className="input"
-                      type="time"
-                      value={form.endTime}
-                      onChange={(e) => update("endTime", e.target.value)}
-                    />
-                  </div>
-
-                  <div className="field full">
-                    <label className="label">
-                      ¿Para cuántos invitados necesitas el servicio?
-                    </label>
-
+                    <label className="label">Invitados</label>
                     <select
                       className="select"
                       value={form.guestCount}
-                      onChange={(e) =>
-                        update("guestCount", Number(e.target.value))
-                      }
+                      onChange={(e) => update("guestCount", Number(e.target.value))}
                     >
                       {config.guestTiers.map((tier) => (
                         <option key={tier.id} value={tier.guest_count}>
@@ -877,10 +798,8 @@ export default function Home() {
                         </option>
                       ))}
                     </select>
-
                     <small className="caption">
-                      El precio base se calcula automáticamente según el número
-                      de invitados seleccionado.
+                      El precio base cambia automáticamente según el número de invitados.
                     </small>
                   </div>
                 </div>
@@ -898,24 +817,13 @@ export default function Home() {
                 </div>
 
                 {availability && (
-                  <div
-                    className={`status ${
-                      availability.available ? "success" : "error"
-                    }`}
-                  >
+                  <div className={`status ${availability.available ? "success" : "error"}`}>
                     {availability.message}
                   </div>
                 )}
 
-                <div className="divider" style={{ margin: "30px 0" }} />
-
-                <div className="section-title">
-                  <div>
-                    <div className="section-kicker">2 · Lugar</div>
-                    <h3>¿Dónde instalaremos el Coffee Cart?</h3>
-                  </div>
-                </div>
-
+                <div className="divider" style={{ margin: "34px 0" }} />
+                <SectionTitle kicker="2 · Lugar" title="¿Dónde instalaremos el Coffee Cart?" />
                 <p className="caption">
                   Estos datos nos ayudan a confirmar que podemos entrar, montar
                   el equipo y operar el servicio correctamente.
@@ -946,14 +854,11 @@ export default function Home() {
                   />
                 </div>
 
-                <div className="divider" style={{ margin: "30px 0" }} />
-
-                <div className="section-title">
-                  <div>
-                    <div className="section-kicker">3 · Acceso y operación</div>
-                    <h3>Lo que necesitamos saber del lugar</h3>
-                  </div>
-                </div>
+                <div className="divider" style={{ margin: "34px 0" }} />
+                <SectionTitle
+                  kicker="3 · Acceso y operación"
+                  title="Lo que necesitamos saber del lugar"
+                />
 
                 <div className="form-grid">
                   <SelectField
@@ -967,14 +872,12 @@ export default function Home() {
                       ["BOTH", "Parte interior y parte exterior"],
                     ]}
                   />
-
                   <TextField
                     label="¿En qué nivel o piso se instalará?"
                     value={form.floor}
                     onChange={(value) => update("floor", value)}
                     placeholder="Ej. planta baja, segundo piso"
                   />
-
                   <SelectField
                     label="¿Hay elevador disponible para mover equipo?"
                     value={form.elevator}
@@ -985,35 +888,27 @@ export default function Home() {
                       ["no", "No"],
                     ]}
                   />
-
                   <TextField
                     label="¿Cómo es el acceso para descargar el equipo?"
                     value={form.unloadingAccess}
                     onChange={(value) => update("unloadingAccess", value)}
                     placeholder="Ej. acceso directo por estacionamiento"
                   />
-
                   <div className="field">
-                    <label className="label">
-                      ¿Desde qué hora podemos entrar a montar?
-                    </label>
+                    <label className="label">¿Desde qué hora podemos entrar a montar?</label>
                     <input
                       className="input"
                       type="datetime-local"
                       value={form.setupAccessTime}
-                      onChange={(e) =>
-                        update("setupAccessTime", e.target.value)
-                      }
+                      onChange={(e) => update("setupAccessTime", e.target.value)}
                     />
                   </div>
-
                   <TextField
                     label="Electricidad disponible"
                     value={form.electricityDetails}
                     onChange={(value) => update("electricityDetails", value)}
                     placeholder="Ej. sí, contacto cercano al área del carrito"
                   />
-
                   <SelectField
                     label="¿Hay agua potable disponible?"
                     value={form.potableWater}
@@ -1024,7 +919,6 @@ export default function Home() {
                       ["no", "No"],
                     ]}
                   />
-
                   <TextField
                     label="Distancia aproximada al punto de agua (metros)"
                     value={form.waterDistanceM}
@@ -1033,14 +927,8 @@ export default function Home() {
                   />
                 </div>
 
-                <div className="divider" style={{ margin: "30px 0" }} />
-
-                <div className="section-title">
-                  <div>
-                    <div className="section-kicker">4 · Personaliza</div>
-                    <h3>Bebidas, alimentos y extras</h3>
-                  </div>
-                </div>
+                <div className="divider" style={{ margin: "34px 0" }} />
+                <SectionTitle kicker="4 · Personaliza" title="Bebidas, alimentos y extras" />
 
                 <div className="quote-card" style={{ marginBottom: 22 }}>
                   <strong>¿Qué incluye el precio base?</strong>
@@ -1054,7 +942,6 @@ export default function Home() {
                 {Object.entries(groupedAddOns).map(([group, items]) => (
                   <div key={group} style={{ marginBottom: 26 }}>
                     <h4>{groupLabel(group)}</h4>
-
                     <div className="check-grid">
                       {items.map((addOn) => {
                         const selected = form.selectedAddOns.find(
@@ -1068,47 +955,30 @@ export default function Home() {
                               checked={Boolean(selected)}
                               onChange={() => toggleAddOn(addOn)}
                             />
-
                             <div style={{ flex: 1 }}>
                               <div className="check-title">{addOn.name}</div>
-                              <div
-                                className="check-text"
-                                style={{ marginTop: 6, fontWeight: 700 }}
-                              >
+                              <div className="check-text" style={{ marginTop: 6, fontWeight: 650 }}>
                                 {addOnPriceLabel(addOn)}
                               </div>
-                              <div
-                                className="check-text"
-                                style={{
-                                  marginTop: 6,
-                                  color: "#9f9f9f",
-                                  lineHeight: 1.6,
-                                }}
-                              >
+                              <div className="check-text" style={{ marginTop: 6 }}>
                                 {addOnDescription(addOn)}
                               </div>
 
                               {selected &&
-                                ["PER_HOUR", "PER_UNIT"].includes(
-                                  addOn.pricing_type
-                                ) && (
+                                ["PER_HOUR", "PER_UNIT"].includes(addOn.pricing_type) && (
                                   <div style={{ marginTop: 12 }}>
                                     <label className="label">
                                       {addOn.pricing_type === "PER_HOUR"
                                         ? "¿Cuántas horas adicionales?"
                                         : "¿Cuántas unidades?"}
                                     </label>
-
                                     <input
                                       className="input"
                                       type="number"
                                       min="1"
                                       value={selected.quantity}
                                       onChange={(e) =>
-                                        setAddOnQuantity(
-                                          addOn.code,
-                                          e.target.value
-                                        )
+                                        setAddOnQuantity(addOn.code, e.target.value)
                                       }
                                     />
                                   </div>
@@ -1127,101 +997,23 @@ export default function Home() {
                     onClick={calculateQuote}
                     disabled={busy === "quote"}
                   >
-                    {busy === "quote"
-                      ? "Calculando..."
-                      : "Calcular precio del evento"}
+                    {busy === "quote" ? "Calculando..." : "Calcular precio del evento"}
                   </button>
                 </div>
 
                 {quote?.quote && (
-                  <div className="quote-card">
-                    <div className="quote-top">
-                      <div>
-                        <div className="quote-money-label">Tu evento</div>
-                        <div className="quote-place">{selectedArea?.city}</div>
-                        <div className="quote-meta">
-                          {form.guestCount} invitados ·{" "}
-                          {durationHours(form.startTime, form.endTime)} horas
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="quote-money-label">Total del evento</div>
-                        <div className="quote-money">
-                          {money(quote.quote.total)}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ marginTop: 20 }}>
-                      {quote.quote.items.map((item) => (
-                        <div
-                          key={`${item.code}-${item.quantity}`}
-                          style={{
-                            padding: "13px 0",
-                            borderBottom: "1px solid rgba(255,255,255,.08)",
-                          }}
-                        >
-                          <div className="summary-row">
-                            <span>{itemHumanLabel(item)}</span>
-                            <strong>{money(item.lineTotal)}</strong>
-                          </div>
-                          <div className="caption" style={{ marginTop: 4 }}>
-                            {itemCalculation(item)}
-                          </div>
-                        </div>
-                      ))}
-
-                      <div className="summary-row">
-                        <span>Subtotal antes de IVA</span>
-                        <strong>{money(quote.quote.subtotal)}</strong>
-                      </div>
-
-                      <div className="summary-row">
-                        <span>IVA {vatPercent.toFixed(0)}%</span>
-                        <strong>{money(quote.quote.vat)}</strong>
-                      </div>
-
-                      <div className="summary-row">
-                        <span>Total del evento</span>
-                        <strong>{money(quote.quote.total)}</strong>
-                      </div>
-
-                      <div className="summary-row" style={{ marginTop: 12 }}>
-                        <span>
-                          <strong>Lo que pagarás hoy</strong>
-                          <div className="caption">
-                            Anticipo para apartar la fecha
-                          </div>
-                        </span>
-                        <strong>{money(quote.quote.deposit)}</strong>
-                      </div>
-
-                      <div className="summary-row">
-                        <span>Saldo que quedará pendiente</span>
-                        <strong>{money(quote.quote.balance)}</strong>
-                      </div>
-
-                      <div className="note" style={{ marginTop: 16 }}>
-                        El total de tu evento es{" "}
-                        <strong>{money(quote.quote.total)}</strong>. Hoy no se
-                        cobra todo: hoy pagarás únicamente el anticipo de{" "}
-                        <strong>{money(quote.quote.deposit)}</strong>. El saldo de{" "}
-                        <strong>{money(quote.quote.balance)}</strong> quedará
-                        pendiente.
-                      </div>
-                    </div>
-                  </div>
+                  <QuoteCard
+                    quote={quote.quote}
+                    selectedArea={selectedArea}
+                    guestCount={form.guestCount}
+                    startTime={form.startTime}
+                    endTime={form.endTime}
+                    vatPercent={vatPercent}
+                  />
                 )}
 
-                <div className="divider" style={{ margin: "30px 0" }} />
-
-                <div className="section-title">
-                  <div>
-                    <div className="section-kicker">5 · Tus datos</div>
-                    <h3>¿Quién está reservando?</h3>
-                  </div>
-                </div>
+                <div className="divider" style={{ margin: "34px 0" }} />
+                <SectionTitle kicker="5 · Tus datos" title="¿Quién está reservando?" />
 
                 <div className="form-grid">
                   <TextField
@@ -1245,9 +1037,7 @@ export default function Home() {
                     <input
                       type="checkbox"
                       checked={form.invoiceRequired}
-                      onChange={(e) =>
-                        update("invoiceRequired", e.target.checked)
-                      }
+                      onChange={(e) => update("invoiceRequired", e.target.checked)}
                     />
                     <div>
                       <div className="check-title">Requiero factura</div>
@@ -1280,9 +1070,7 @@ export default function Home() {
                   )}
 
                   <div className="field full">
-                    <label className="label">
-                      Notas o instrucciones especiales
-                    </label>
+                    <label className="label">Notas o instrucciones especiales</label>
                     <textarea
                       className="textarea"
                       value={form.notes}
@@ -1296,21 +1084,17 @@ export default function Home() {
                   <input
                     type="checkbox"
                     checked={form.termsAccepted}
-                    onChange={(e) =>
-                      update("termsAccepted", e.target.checked)
-                    }
+                    onChange={(e) => update("termsAccepted", e.target.checked)}
                   />
-
                   <div>
                     <div className="check-title">
-                      Entiendo qué estoy contratando y acepto las condiciones
-                      del servicio
+                      Entiendo qué estoy contratando y acepto las condiciones del servicio
                     </div>
                     <div className="check-text">
-                      Entiendo que estoy contratando un servicio de Java Coffee
-                      Cart para un evento, que el precio total aparece arriba,
-                      que hoy pagaré únicamente el anticipo para apartar la
-                      fecha y que el saldo restante no se cobra hoy.
+                      Entiendo que estoy contratando un servicio de Java Coffee Cart
+                      para un evento, que el precio total aparece arriba, que hoy
+                      pagaré únicamente el anticipo para apartar la fecha y que el
+                      saldo restante no se cobra hoy.
                     </div>
                   </div>
                 </label>
@@ -1321,39 +1105,29 @@ export default function Home() {
                     disabled={busy === "hold"}
                     onClick={createHold}
                   >
-                    {busy === "hold"
-                      ? "Apartando fecha..."
-                      : "Apartar fecha con anticipo"}
+                    {busy === "hold" ? "Apartando fecha..." : "Apartar fecha con anticipo"}
                   </button>
                 </div>
 
                 {hold && (
                   <div className="hold-card">
-                    <div className="section-kicker">
-                      Fecha apartada temporalmente
-                    </div>
-
+                    <div className="section-kicker">Fecha apartada temporalmente</div>
                     <h3>{hold.eventOrderNumber}</h3>
-                    <div className="countdown">
-                      {formatCountdown(remaining)}
-                    </div>
+                    <div className="countdown">{formatCountdown(remaining)}</div>
                     <div className="caption">
-                      Completa el pago del anticipo antes de que termine este
-                      tiempo.
+                      Completa el pago del anticipo antes de que termine este tiempo.
                     </div>
 
                     <div className="quote-card" style={{ marginTop: 20 }}>
                       <strong>Antes de pagar</strong>
                       <p className="caption" style={{ marginBottom: 0 }}>
-                        Shopify abrirá el pago del anticipo. La pestaña de Java
-                        permanecerá abierta mostrando el estado de tu evento.
+                        Shopify abrirá el pago del anticipo. Java permanecerá
+                        mostrando el estado de tu evento.
                       </p>
                     </div>
 
                     <h4 style={{ marginTop: 25 }}>Documentos del lugar</h4>
-                    <p className="caption">
-                      Si los tienes a la mano, puedes subirlos ahora.
-                    </p>
+                    <p className="caption">Si los tienes a la mano, puedes subirlos ahora.</p>
 
                     <UploadField
                       label="Foto del lugar"
@@ -1380,9 +1154,7 @@ export default function Home() {
                       >
                         {busy === "checkout"
                           ? "Preparando pago..."
-                          : `Pagar anticipo de ${money(
-                              quote?.quote?.deposit || 0
-                            )}`}
+                          : `Pagar anticipo de ${money(quote?.quote?.deposit || 0)}`}
                       </button>
                     </div>
                   </div>
@@ -1397,67 +1169,45 @@ export default function Home() {
 
         <aside className="panel summary-card">
           <h3 className="summary-title">Resumen de tu evento</h3>
-
           <div className="summary-block">
-            <div className="summary-row">
-              <span>Ciudad</span>
-              <strong>
-                {form.serviceAreaId === "OTHER"
+            <SummaryRow
+              label="Ciudad"
+              value={
+                form.serviceAreaId === "OTHER"
                   ? "Otra ciudad"
                   : selectedArea
                   ? `${selectedArea.city}, ${selectedArea.state}`
-                  : "—"}
-              </strong>
-            </div>
-
-            <div className="summary-row">
-              <span>Invitados</span>
-              <strong>{form.guestCount}</strong>
-            </div>
-
-            <div className="summary-row">
-              <span>Fecha</span>
-              <strong>{form.eventDate || "—"}</strong>
-            </div>
-
-            <div className="summary-row">
-              <span>Horario</span>
-              <strong>
-                {form.startTime && form.endTime
-                  ? `${form.startTime} – ${form.endTime}`
-                  : "—"}
-              </strong>
-            </div>
+                  : "—"
+              }
+            />
+            <SummaryRow label="Invitados" value={form.guestCount} />
+            <SummaryRow label="Fecha" value={form.eventDate ? dateLabel(form.eventDate) : "—"} />
+            <SummaryRow
+              label="Horario"
+              value={
+                form.startTime && form.endTime
+                  ? `${timeLabel(form.startTime)} – ${timeLabel(form.endTime)}`
+                  : "—"
+              }
+            />
           </div>
 
           {quote?.quote ? (
             <>
               <div className="summary-block">
-                <div className="summary-row">
-                  <span>Subtotal</span>
-                  <strong>{money(quote.quote.subtotal)}</strong>
-                </div>
-                <div className="summary-row">
-                  <span>IVA {vatPercent.toFixed(0)}%</span>
-                  <strong>{money(quote.quote.vat)}</strong>
-                </div>
-                <div className="summary-row">
-                  <span>Total del evento</span>
-                  <strong>{money(quote.quote.total)}</strong>
-                </div>
+                <SummaryRow label="Subtotal" value={money(quote.quote.subtotal)} />
+                <SummaryRow
+                  label={`IVA ${vatPercent.toFixed(0)}%`}
+                  value={money(quote.quote.vat)}
+                />
+                <SummaryRow label="Total del evento" value={money(quote.quote.total)} />
               </div>
-
               <div className="summary-block">
                 <div className="section-kicker" style={{ marginBottom: 8 }}>
                   Pago de hoy
                 </div>
-                <div className="summary-big">
-                  {money(quote.quote.deposit)}
-                </div>
-                <div className="caption">
-                  Anticipo para apartar la fecha.
-                </div>
-
+                <div className="summary-big">{money(quote.quote.deposit)}</div>
+                <div className="caption">Anticipo para apartar la fecha.</div>
                 <div className="summary-row" style={{ marginTop: 12 }}>
                   <span>Saldo después del anticipo</span>
                   <strong>{money(quote.quote.balance)}</strong>
@@ -1466,8 +1216,8 @@ export default function Home() {
             </>
           ) : (
             <div className="note">
-              Cuando calcules el precio, aquí verás claramente cuánto cuesta
-              todo el evento, cuánto pagarás hoy y cuánto quedará pendiente.
+              Cuando calcules el precio, aquí verás cuánto cuesta todo el evento,
+              cuánto pagarás hoy y cuánto quedará pendiente.
             </div>
           )}
 
@@ -1478,6 +1228,305 @@ export default function Home() {
         </aside>
       </div>
     </main>
+  );
+}
+
+function EventSchedulePicker({ eventDate, startTime, endTime, onDate, onStart, onEnd }) {
+  const selectedDate = parseDate(eventDate);
+  const [month, setMonth] = useState(
+    selectedDate
+      ? new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)
+      : new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+  );
+  const [activeTime, setActiveTime] = useState("start");
+  const days = useMemo(() => buildCalendar(month), [month]);
+  const today = isoDate(new Date());
+  const duration = durationHours(startTime, endTime);
+
+  function chooseStart(value) {
+    onStart(value);
+    if (minutesFromTime(endTime) <= minutesFromTime(value)) {
+      onEnd(timeFromMinutes(minutesFromTime(value) + 120));
+    }
+    setActiveTime("end");
+  }
+
+  return (
+    <section className="java-datetime-picker">
+      <div className="java-datetime-head">
+        <div>
+          <div className="java-datetime-kicker">FECHA Y HORARIO</div>
+          <h4>Elige el día y la hora de tu evento</h4>
+          <p>
+            Selecciona directamente en el calendario. Después elige hora de inicio
+            y término. La disponibilidad se valida antes de cotizar.
+          </p>
+        </div>
+        <div className="java-datetime-summary">
+          <span>{dateLabel(eventDate)}</span>
+          <strong>
+            {timeLabel(startTime)} – {timeLabel(endTime)}
+          </strong>
+          <small>{duration > 0 ? `${duration} horas de servicio` : "Horario inválido"}</small>
+        </div>
+      </div>
+
+      <div className="java-datetime-grid">
+        <div className="java-calendar-card">
+          <div className="java-calendar-toolbar">
+            <button
+              type="button"
+              onClick={() =>
+                setMonth(
+                  (current) => new Date(current.getFullYear(), current.getMonth() - 1, 1)
+                )
+              }
+              aria-label="Mes anterior"
+            >
+              ←
+            </button>
+            <strong>
+              {new Intl.DateTimeFormat("es-MX", {
+                month: "long",
+                year: "numeric",
+              }).format(month)}
+            </strong>
+            <button
+              type="button"
+              onClick={() =>
+                setMonth(
+                  (current) => new Date(current.getFullYear(), current.getMonth() + 1, 1)
+                )
+              }
+              aria-label="Mes siguiente"
+            >
+              →
+            </button>
+          </div>
+
+          <div className="java-calendar-weekdays">
+            {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((day) => (
+              <span key={day}>{day}</span>
+            ))}
+          </div>
+
+          <div className="java-calendar-days">
+            {days.map((date) => {
+              const value = isoDate(date);
+              const outside = date.getMonth() !== month.getMonth();
+              const disabled = value < today;
+              const selected = value === eventDate;
+              const isToday = value === today;
+
+              return (
+                <button
+                  type="button"
+                  key={value}
+                  disabled={disabled}
+                  className={`${outside ? "outside" : ""} ${
+                    selected ? "selected" : ""
+                  } ${isToday ? "today" : ""}`}
+                  onClick={() => onDate(value)}
+                >
+                  {date.getDate()}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="java-time-card">
+          <div className="java-time-tabs">
+            <button
+              type="button"
+              className={activeTime === "start" ? "active" : ""}
+              onClick={() => setActiveTime("start")}
+            >
+              <span>Inicio</span>
+              <strong>{timeLabel(startTime)}</strong>
+            </button>
+            <button
+              type="button"
+              className={activeTime === "end" ? "active" : ""}
+              onClick={() => setActiveTime("end")}
+            >
+              <span>Término</span>
+              <strong>{timeLabel(endTime)}</strong>
+            </button>
+          </div>
+
+          <div className="java-time-help">
+            {activeTime === "start"
+              ? "Selecciona a qué hora inicia el servicio. Después pasaremos automáticamente al término."
+              : "Selecciona la hora de término. Las horas anteriores al inicio están deshabilitadas."}
+          </div>
+
+          <div className="java-time-slots">
+            {TIME_SLOTS.map((slot) => {
+              const selected = activeTime === "start" ? slot === startTime : slot === endTime;
+              const disabled =
+                activeTime === "end" && minutesFromTime(slot) <= minutesFromTime(startTime);
+
+              return (
+                <button
+                  type="button"
+                  key={`${activeTime}-${slot}`}
+                  className={selected ? "selected" : ""}
+                  disabled={disabled}
+                  onClick={() =>
+                    activeTime === "start" ? chooseStart(slot) : onEnd(slot)
+                  }
+                >
+                  {timeLabel(slot)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function UnsupportedCityLead({ lead, setLead, busy, submitLead }) {
+  return (
+    <div className="quote-card">
+      <h3>Quiero Java Coffee Cart en otra ciudad</h3>
+      <p className="caption">
+        Todavía no podemos cobrarte un evento fuera de las zonas activas, pero
+        podemos guardar tu solicitud para expansión.
+      </p>
+      <div className="form-grid">
+        <TextField label="Ciudad" value={lead.city} onChange={(value) => setLead({ ...lead, city: value })} />
+        <TextField label="Estado" value={lead.state} onChange={(value) => setLead({ ...lead, state: value })} />
+        <TextField label="Tu nombre" value={lead.customerName} onChange={(value) => setLead({ ...lead, customerName: value })} />
+        <TextField label="Correo" value={lead.email} onChange={(value) => setLead({ ...lead, email: value })} />
+        <TextField label="Teléfono" value={lead.phone} onChange={(value) => setLead({ ...lead, phone: value })} />
+        <TextField label="Tipo de evento" value={lead.eventType} onChange={(value) => setLead({ ...lead, eventType: value })} />
+        <div className="field">
+          <label className="label">Fecha estimada</label>
+          <input
+            className="input"
+            type="date"
+            value={lead.expectedDate}
+            onChange={(e) => setLead({ ...lead, expectedDate: e.target.value })}
+          />
+        </div>
+        <div className="field">
+          <label className="label">Invitados estimados</label>
+          <input
+            className="input"
+            type="number"
+            min="1"
+            value={lead.estimatedGuests}
+            onChange={(e) =>
+              setLead({ ...lead, estimatedGuests: Number(e.target.value) })
+            }
+          />
+        </div>
+      </div>
+      <label className="check-card" style={{ marginTop: 15 }}>
+        <input
+          type="checkbox"
+          checked={lead.marketingConsent}
+          onChange={(e) => setLead({ ...lead, marketingConsent: e.target.checked })}
+        />
+        <div>
+          <div className="check-title">Quiero recibir noticias cuando Java llegue a mi ciudad</div>
+        </div>
+      </label>
+      <div className="action-row">
+        <button className="button button-primary" onClick={submitLead}>
+          {busy === "lead" ? "Guardando..." : "Enviar solicitud"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function QuoteCard({ quote, selectedArea, guestCount, startTime, endTime, vatPercent }) {
+  return (
+    <div className="quote-card">
+      <div className="quote-top">
+        <div>
+          <div className="quote-money-label">Tu evento</div>
+          <div className="quote-place">{selectedArea?.city}</div>
+          <div className="quote-meta">
+            {guestCount} invitados · {durationHours(startTime, endTime)} horas
+          </div>
+        </div>
+        <div>
+          <div className="quote-money-label">Total del evento</div>
+          <div className="quote-money">{money(quote.total)}</div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 20 }}>
+        {quote.items.map((item) => (
+          <div
+            key={`${item.code}-${item.quantity}`}
+            style={{ padding: "13px 0", borderBottom: "1px solid rgba(29,29,31,.08)" }}
+          >
+            <div className="summary-row">
+              <span>{itemHumanLabel(item)}</span>
+              <strong>{money(item.lineTotal)}</strong>
+            </div>
+            <div className="caption" style={{ marginTop: 4 }}>
+              {itemCalculation(item)}
+            </div>
+          </div>
+        ))}
+
+        <SummaryRow label="Subtotal antes de IVA" value={money(quote.subtotal)} />
+        <SummaryRow label={`IVA ${vatPercent.toFixed(0)}%`} value={money(quote.vat)} />
+        <SummaryRow label="Total del evento" value={money(quote.total)} />
+
+        <div className="summary-row" style={{ marginTop: 12 }}>
+          <span>
+            <strong>Lo que pagarás hoy</strong>
+            <div className="caption">Anticipo para apartar la fecha</div>
+          </span>
+          <strong>{money(quote.deposit)}</strong>
+        </div>
+
+        <SummaryRow label="Saldo que quedará pendiente" value={money(quote.balance)} />
+
+        <div className="note" style={{ marginTop: 16 }}>
+          El total de tu evento es <strong>{money(quote.total)}</strong>. Hoy
+          pagarás únicamente el anticipo de <strong>{money(quote.deposit)}</strong>.
+          El saldo de <strong>{money(quote.balance)}</strong> quedará pendiente.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Micro({ label, value }) {
+  return (
+    <div className="micro-box">
+      <div className="micro-kicker">{label}</div>
+      <div className="micro-value">{value}</div>
+    </div>
+  );
+}
+
+function SectionTitle({ kicker, title }) {
+  return (
+    <div className="section-title">
+      <div>
+        <div className="section-kicker">{kicker}</div>
+        <h3>{title}</h3>
+      </div>
+    </div>
+  );
+}
+
+function SummaryRow({ label, value }) {
+  return (
+    <div className="summary-row">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
   );
 }
 
@@ -1498,28 +1547,23 @@ function ExplainerStep({ number, title, text }) {
           borderRadius: 999,
           display: "grid",
           placeItems: "center",
-          background: "rgba(240,90,34,.18)",
-          border: "1px solid rgba(240,90,34,.4)",
-          fontWeight: 800,
+          background: "#fff2eb",
+          border: "1px solid rgba(240,90,34,.24)",
+          color: "#c94a18",
+          fontWeight: 700,
         }}
       >
         {number}
       </div>
-
       <div>
-        <div style={{ fontWeight: 800, marginBottom: 3 }}>{title}</div>
+        <div style={{ fontWeight: 650, marginBottom: 3 }}>{title}</div>
         <div className="caption">{text}</div>
       </div>
     </div>
   );
 }
 
-function TextField({
-  label,
-  value,
-  onChange,
-  placeholder = "",
-}) {
+function TextField({ label, value, onChange, placeholder = "" }) {
   return (
     <div className="field">
       <label className="label">{label}</label>
@@ -1537,11 +1581,7 @@ function SelectField({ label, value, onChange, options }) {
   return (
     <div className="field">
       <label className="label">{label}</label>
-      <select
-        className="select"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      >
+      <select className="select" value={value} onChange={(e) => onChange(e.target.value)}>
         {options.map(([optionValue, optionLabel]) => (
           <option value={optionValue} key={optionValue}>
             {optionLabel}
