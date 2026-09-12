@@ -216,6 +216,33 @@ body.java-quote-wizard-open .java-quote-wizard-backdrop {
   min-height: 120px;
 }
 
+.java-quote-wizard-open .java-legacy-quote-action {
+  display: none !important;
+}
+
+.java-quote-wizard-panel .check-card {
+  cursor: pointer;
+  transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+
+.java-quote-wizard-panel .check-card:hover {
+  border-color: rgba(240,90,34,.28) !important;
+  background: #fffaf7 !important;
+}
+
+.java-quote-wizard-panel .check-card:has(input[type="checkbox"]:checked) {
+  border-color: rgba(240,90,34,.42) !important;
+  background: #fff7f2 !important;
+  box-shadow: 0 10px 28px rgba(240,90,34,.08);
+}
+
+.java-quote-wizard-panel .check-card input,
+.java-quote-wizard-panel .check-card select,
+.java-quote-wizard-panel .check-card textarea,
+.java-quote-wizard-panel .check-card button {
+  cursor: auto;
+}
+
 .java-quote-wizard-footer-mount {
   position: sticky;
   bottom: 0;
