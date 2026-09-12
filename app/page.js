@@ -310,7 +310,10 @@ export default function Home() {
 
       setConfig(data);
 
-      const firstArea = data.serviceAreas?.[0];
+      const firstArea =
+        data.serviceAreas?.find((area) => /torre[oó]n/i.test(area.city || "")) ||
+        data.serviceAreas?.find((area) => /g[oó]mez palacio/i.test(area.city || "")) ||
+        data.serviceAreas?.[0];
       const firstTier = data.guestTiers?.[0];
 
       setForm((current) => ({
