@@ -59,6 +59,10 @@ function availabilityReady() {
   );
 }
 
+function currentErrorText() {
+  return String(document.querySelector("main.app-shell .status.error")?.textContent || "").trim();
+}
+
 function termsCheckbox() {
   return Array.from(document.querySelectorAll("main.app-shell .check-card input[type='checkbox']")).find(
     (input) => /acepto las condiciones|entiendo qué estoy contratando/i.test(input.closest(".check-card")?.textContent || "")
@@ -188,9 +192,10 @@ function targetForError(text) {
 export default function QuoteFlowWizard() {
   const pathname = usePathname();
   const [step, setStep] = useState(1);
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [mount, setMount] = useState(null);
   const [message, setMessage] = useState("");
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
   const timerRef = useRef(null);
   const lastErrorRef = useRef("");
 
@@ -202,6 +207,61 @@ export default function QuoteFlowWizard() {
     timerRef.current = setTimeout(() => setMessage(""), 4200);
     focusNode(target);
     return true;
+  }
+
+  function verifyAvailabilityAndContinue() {
+    const verifyButton = button(/verificar disponibilidad/i);
+    if (!verifyButton || verifyButton.disabled) {
+      alertUser(["No pudimos iniciar la verificación de disponibilidad. Intenta nuevamente.", verifyButton]);
+      return;
+    }
+
+    setCheckingAvailability(true);
+    setMessage("Verificando disponibilidad de la fecha…");
+    lastErrorRef.current = "";
+    verifyButton.click();
+
+    const startedAt = Date.now();
+    const interval = window.setInterval(() => {
+      if (availabilityReady()) {
+        window.clearInterval(interval);
+        setCheckingAvailability(false);
+        setMessage("");
+        setStep(2);
+        return;
+      }
+
+      const errorText = currentErrorText();
+      if (errorText) {
+        window.clearInterval(interval);
+        setCheckingAvailability(false);
+        setMessage(errorText);
+        focusNode(targetForError(errorText) || verifyButton);
+        return;
+      }
+
+      if (Date.now() - startedAt > 12000) {
+        window.clearInterval(interval);
+        setCheckingAvailability(false);
+        setMessage("La verificación está tardando más de lo esperado. Intenta nuevamente.");
+        focusNode(verifyButton);
+      }
+    }, 250);
+  }
+
+  function handleContinue() {
+    const result = validate(step);
+
+    if (
+      step === 1 &&
+      result?.[0] === "Verifica la disponibilidad de la fecha antes de continuar."
+    ) {
+      verifyAvailabilityAndContinue();
+      return;
+    }
+
+    if (alertUser(result)) return;
+    setStep((value) => Math.min(5, value + 1));
   }
 
   useEffect(() => {
@@ -292,8 +352,12 @@ export default function QuoteFlowWizard() {
           </div>
           {message && <div className="java-quote-wizard-alert">{message}</div>}
           <div className="java-quote-wizard-nav">
-            <button type="button" className="secondary" disabled={step === 1} onClick={() => setStep((value) => Math.max(1, value - 1))}>← Atrás</button>
-            {step < 5 && <button type="button" className="primary" onClick={() => { if (alertUser(validate(step))) return; setStep((value) => Math.min(5, value + 1)); }}>Continuar →</button>}
+            <button type="button" className="secondary" disabled={step === 1 || checkingAvailability} onClick={() => setStep((value) => Math.max(1, value - 1))}>← Atrás</button>
+            {step < 5 && (
+              <button type="button" className="primary" disabled={checkingAvailability} onClick={handleContinue}>
+                {checkingAvailability ? "Verificando…" : "Continuar →"}
+              </button>
+            )}
           </div>
         </div>,
         mount
