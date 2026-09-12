@@ -482,6 +482,28 @@ export default function QuoteFlowWizard() {
   }, [pathname]);
 
   useEffect(() => {
+    if (pathname !== "/" || step !== 5 || !open) return;
+
+    const panel = document.querySelector(".java-quote-wizard-panel");
+    if (!panel) return;
+
+    function revealPayment() {
+      const holdCard = panel.querySelector(".hold-card");
+      if (!holdCard || holdCard.dataset.javaPaymentRevealed === "1") return;
+      holdCard.dataset.javaPaymentRevealed = "1";
+      window.setTimeout(() => {
+        holdCard.scrollIntoView({ behavior: "smooth", block: "start" });
+        holdCard.querySelector(".java-payment-action button")?.focus({ preventScroll: true });
+      }, 120);
+    }
+
+    revealPayment();
+    const observer = new MutationObserver(revealPayment);
+    observer.observe(panel, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [pathname, step, open]);
+
+  useEffect(() => {
     if (pathname !== "/") return;
 
     const pageGrid = document.querySelector("main.app-shell .page-grid");
@@ -572,9 +594,15 @@ export default function QuoteFlowWizard() {
     ? "Confirmando fecha…"
     : calculatingQuote
     ? "Calculando cotización…"
+    : step === 1
+    ? "Confirmar fecha y continuar →"
+    : step === 2
+    ? "Guardar lugar y continuar →"
+    : step === 3
+    ? "Guardar acceso y continuar →"
     : step === 4 && !quoteCalculated
-    ? "Ver mi cotización →"
-    : "Continuar →";
+    ? "Ver precio completo →"
+    : "Revisé el total · Continuar →";
 
   return (
     <>
@@ -618,25 +646,31 @@ export default function QuoteFlowWizard() {
 
       {footerMount &&
         createPortal(
-          <div className="java-quote-wizard-footer">
-            <button
-              type="button"
-              className="secondary"
-              disabled={step === 1 || checkingAvailability || calculatingQuote}
-              onClick={() => setStep((value) => Math.max(1, value - 1))}
-            >
-              ← Atrás
-            </button>
+          <div
+            className={`java-quote-wizard-footer ${step === 1 ? "no-back" : ""} ${
+              step === 5 ? "last-step" : ""
+            }`}
+          >
+            {step > 1 && (
+              <button
+                type="button"
+                className="secondary"
+                disabled={checkingAvailability || calculatingQuote}
+                onClick={() => setStep((value) => Math.max(1, value - 1))}
+              >
+                ← Atrás
+              </button>
+            )}
 
             <div className="java-quote-wizard-footer-copy">
               <strong>Paso {step} de {STEPS.length}</strong>
               <span>
                 {step === 1
-                  ? "Continuar confirma la disponibilidad de la fecha en tiempo real."
+                  ? "Validaremos la fecha en tiempo real. Cotizar no genera ningún cobro."
                   : step === 4 && !quoteCalculated
-                  ? "Continuar calcula tu cotización; después podrás revisar el total antes de reservar."
+                  ? "Verás traslado, extras, IVA, anticipo de hoy y saldo pendiente."
                   : step === 5
-                  ? "Revisa tus datos, acepta las condiciones y aparta la fecha con el anticipo."
+                  ? "Completa tus datos y aparta la fecha temporalmente antes del pago."
                   : "Puedes volver a cualquier paso anterior antes de pagar."}
               </span>
             </div>
