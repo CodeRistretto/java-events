@@ -2,11 +2,13 @@
 
 import React from "react";
 import LocationPinEnhancer from "./LocationPinEnhancer";
+import MapVisibilityEnhancer from "./MapVisibilityEnhancer";
 import EventDurationGuard from "./EventDurationGuard";
 import EventPhotoExperience from "./EventPhotoExperience";
 import LeadCaptureEnhancer from "./LeadCaptureEnhancer";
 import EventFormHardening from "./EventFormHardening";
 import QuoteFlowWizard from "./QuoteFlowWizard";
+import StatusToastEnhancer from "./StatusToastEnhancer";
 import ConfirmationPaymentCTA from "./ConfirmationPaymentCTA";
 import FloatingEventCart from "./FloatingEventCart";
 
@@ -36,6 +38,9 @@ export default function SafeClientEnhancers() {
       <EnhancerBoundary name="LocationPinEnhancer">
         <LocationPinEnhancer />
       </EnhancerBoundary>
+      <EnhancerBoundary name="MapVisibilityEnhancer">
+        <MapVisibilityEnhancer />
+      </EnhancerBoundary>
       <EnhancerBoundary name="EventDurationGuard">
         <EventDurationGuard />
       </EnhancerBoundary>
@@ -50,6 +55,9 @@ export default function SafeClientEnhancers() {
       </EnhancerBoundary>
       <EnhancerBoundary name="QuoteFlowWizard">
         <QuoteFlowWizard />
+      </EnhancerBoundary>
+      <EnhancerBoundary name="StatusToastEnhancer">
+        <StatusToastEnhancer />
       </EnhancerBoundary>
       <EnhancerBoundary name="FloatingEventCart">
         <FloatingEventCart />
