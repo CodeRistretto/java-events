@@ -22,10 +22,14 @@ alter table public.bookings
   add column if not exists email_unsubscribe_token uuid not null default gen_random_uuid();
 
 alter table public.event_leads
-  add column if not exists marketing_consent boolean not null default false;
+  add column if not exists marketing_consent boolean not null default false,
+  add column if not exists email_unsubscribe_token uuid not null default gen_random_uuid();
 
 create unique index if not exists bookings_email_unsubscribe_token_idx
   on public.bookings(email_unsubscribe_token);
+
+create unique index if not exists event_leads_email_unsubscribe_token_idx
+  on public.event_leads(email_unsubscribe_token);
 
 create table if not exists public.event_email_templates (
   code text primary key,
@@ -56,8 +60,22 @@ create table if not exists public.event_email_rules (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.event_lead_email_log (
+  id uuid primary key default gen_random_uuid(),
+  lead_id uuid not null references public.event_leads(id) on delete cascade,
+  reminder_key text not null,
+  email_type text not null default 'APP_EMAIL_REACTIVATION',
+  recipient text,
+  subject text,
+  metadata jsonb not null default '{}'::jsonb,
+  sent_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  unique (lead_id, reminder_key)
+);
+
 alter table public.event_email_templates enable row level security;
 alter table public.event_email_rules enable row level security;
+alter table public.event_lead_email_log enable row level security;
 
 insert into public.event_email_templates (code, name, subject_template, body_template, active)
 values
@@ -96,8 +114,11 @@ values
 ('BALANCE_D5','Saldo · 5 días antes','BALANCE_REMINDER','SHOPIFY_INVOICE','EVENT_DATE_OFFSET',5,null,1,true,true,false,true,40),
 ('BALANCE_D4','Saldo · 4 días antes','BALANCE_REMINDER','SHOPIFY_INVOICE','EVENT_DATE_OFFSET',4,null,1,true,true,false,true,50),
 ('BALANCE_D3','Saldo · 3 días antes','BALANCE_REMINDER','SHOPIFY_INVOICE','EVENT_DATE_OFFSET',3,null,1,true,true,false,true,60),
-('UNPAID_MONTHLY','Seguimiento mensual sin anticipo','MONTHLY_REACTIVATION','APP_EMAIL','BOOKING_AGE_INTERVAL',null,30,12,false,false,true,true,100)
+('UNPAID_MONTHLY','Seguimiento mensual sin anticipo','MONTHLY_REACTIVATION','APP_EMAIL','LEAD_AGE_INTERVAL',null,30,12,false,false,true,true,100)
 on conflict (code) do nothing;
 
 create index if not exists event_email_rules_active_sort_idx
   on public.event_email_rules(active, sort_order);
+
+create index if not exists event_lead_email_log_lead_sent_idx
+  on public.event_lead_email_log(lead_id, sent_at desc);
