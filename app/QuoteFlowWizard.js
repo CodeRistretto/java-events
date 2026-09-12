@@ -59,6 +59,12 @@ function availabilityReady() {
   );
 }
 
+function termsCheckbox() {
+  return Array.from(document.querySelectorAll("main.app-shell .check-card input[type='checkbox']")).find(
+    (input) => /acepto las condiciones|entiendo qué estoy contratando/i.test(input.closest(".check-card")?.textContent || "")
+  );
+}
+
 function validate(step) {
   if (step === 1) {
     const city = control("Ciudad del evento");
@@ -125,6 +131,8 @@ function validate(step) {
       const node = control(label);
       if (!hasValue(node)) return [message, node];
     }
+    const terms = termsCheckbox();
+    if (terms && !terms.checked) return ["Acepta las condiciones del servicio para continuar.", terms];
   }
 
   return null;
@@ -148,6 +156,35 @@ function applyStepVisibility(formSection, activeStep) {
   }
 }
 
+function fixServiceCopy() {
+  for (const item of Array.from(document.querySelectorAll(".java-terms-detail li"))) {
+    if (!/garrafones/i.test(item.textContent || "")) continue;
+    const strong = document.createElement("strong");
+    strong.textContent = "Agua.";
+    item.replaceChildren(
+      strong,
+      document.createTextNode(
+        " Java lleva su agua potable; no es obligatorio que el venue proporcione una toma de agua potable para el Coffee Cart."
+      )
+    );
+  }
+}
+
+function targetForError(text) {
+  if (/nombre completo/i.test(text)) return control("Nombre completo");
+  if (/correo/i.test(text)) return control("Correo electrónico");
+  if (/teléfono|telefono|whatsapp/i.test(text)) return control("Teléfono / WhatsApp");
+  if (/calle|número|numero/i.test(text)) return control("Calle y número");
+  if (/colonia/i.test(text)) return control("Colonia");
+  if (/código postal|codigo postal/i.test(text)) return control("Código postal");
+  if (/elevador/i.test(text)) return control("¿Hay elevador disponible");
+  if (/electricidad/i.test(text)) return control("Conexión eléctrica disponible");
+  if (/montaje/i.test(text)) return document.querySelector("[data-java-setup-select]");
+  if (/condiciones/i.test(text)) return termsCheckbox();
+  if (/pin|ubicación exacta|ubicacion exacta/i.test(text)) return document.querySelector(".java-location-picker");
+  return null;
+}
+
 export default function QuoteFlowWizard() {
   const pathname = usePathname();
   const [step, setStep] = useState(1);
@@ -155,6 +192,7 @@ export default function QuoteFlowWizard() {
   const [mount, setMount] = useState(null);
   const [message, setMessage] = useState("");
   const timerRef = useRef(null);
+  const lastErrorRef = useRef("");
 
   function alertUser(result) {
     if (!result) return false;
@@ -180,6 +218,7 @@ export default function QuoteFlowWizard() {
 
       panel.classList.add("java-quote-wizard-panel");
       document.body.classList.toggle("java-quote-wizard-open", open);
+      fixServiceCopy();
 
       const city = control("Ciudad del evento");
       const other = city ? Array.from(city.options || []).find((option) => option.value === "OTHER") : null;
@@ -222,13 +261,14 @@ export default function QuoteFlowWizard() {
     if (pathname !== "/") return;
     const interval = setInterval(() => {
       const error = document.querySelector("main.app-shell .status.error");
-      if (!error || !String(error.textContent || "").trim()) return;
-      const text = String(error.textContent || "").trim();
-      if (text === message) return;
+      const text = String(error?.textContent || "").trim();
+      if (!text || text === lastErrorRef.current) return;
+      lastErrorRef.current = text;
       setMessage(text);
+      focusNode(targetForError(text));
     }, 650);
     return () => clearInterval(interval);
-  }, [pathname, message]);
+  }, [pathname]);
 
   if (pathname !== "/") return null;
   const current = STEPS[step - 1];
