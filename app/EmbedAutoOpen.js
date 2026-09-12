@@ -68,6 +68,8 @@ export default function EmbedAutoOpen() {
         display: grid;
         justify-items: center;
         gap: 14px;
+        padding: 24px;
+        text-align: center;
       }
 
       .java-embed-loading span {
@@ -84,6 +86,20 @@ export default function EmbedAutoOpen() {
         font-weight: 700;
         letter-spacing: .11em;
         text-transform: uppercase;
+      }
+
+      .java-embed-loading button {
+        appearance: none;
+        border: 0;
+        border-radius: 999px;
+        background: #D81F26;
+        color: #fff;
+        min-height: 44px;
+        padding: 0 18px;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
       }
 
       body.java-quote-wizard-open .java-embed-loading {
@@ -103,14 +119,28 @@ export default function EmbedAutoOpen() {
     let attempts = 0;
     let interval = null;
     let observer = null;
+    let didRequestOpen = false;
+
+    const wizardReady = () => {
+      const launch = document.querySelector(".java-quote-wizard-launch");
+      const panel = document.querySelector(".java-quote-wizard-panel");
+      const formSection = panel?.querySelector(".form-section");
+      const progressMount = panel?.querySelector(":scope > .java-quote-wizard-progress-mount");
+      const footerMount = panel?.querySelector(":scope > .java-quote-wizard-footer-mount");
+
+      return Boolean(launch && panel && formSection && progressMount && footerMount);
+    };
 
     const tryOpen = () => {
       if (!shouldOpen) return true;
       if (document.body.classList.contains("java-quote-wizard-open")) return true;
+      if (didRequestOpen) return false;
+      if (!wizardReady()) return false;
 
       const launch = document.querySelector(".java-quote-wizard-launch");
       if (!launch) return false;
 
+      didRequestOpen = true;
       launch.click();
       return true;
     };
@@ -122,6 +152,21 @@ export default function EmbedAutoOpen() {
       return true;
     };
 
+    const showRetry = () => {
+      didRequestOpen = false;
+      loading.innerHTML = `
+        <div>
+          <small>No pudimos abrir la cotización automáticamente</small>
+          <button type="button">Reintentar</button>
+        </div>
+      `;
+      loading.querySelector("button")?.addEventListener("click", () => {
+        attempts = 0;
+        loading.innerHTML = '<div><span></span><small>Preparando tu cotización</small></div>';
+        tryOpen();
+      });
+    };
+
     if (!tryOpen()) {
       observer = new MutationObserver(() => {
         if (tryOpen()) observer?.disconnect();
@@ -131,11 +176,27 @@ export default function EmbedAutoOpen() {
 
     interval = window.setInterval(() => {
       attempts += 1;
-      tryOpen();
-      if (finishWhenOpen() || attempts >= 160) {
+
+      if (!didRequestOpen) tryOpen();
+
+      if (finishWhenOpen()) {
         window.clearInterval(interval);
         interval = null;
         observer?.disconnect();
+        return;
+      }
+
+      // If React received the click before the wizard DOM was fully synchronized,
+      // allow one more guarded attempt instead of leaving the embed stuck forever.
+      if (didRequestOpen && attempts % 20 === 0) {
+        didRequestOpen = false;
+      }
+
+      if (attempts >= 200) {
+        window.clearInterval(interval);
+        interval = null;
+        observer?.disconnect();
+        showRetry();
       }
     }, 75);
 
