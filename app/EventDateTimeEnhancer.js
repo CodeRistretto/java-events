@@ -99,9 +99,8 @@ export default function EventDateTimeEnhancer() {
 
     let cleanupCurrent = null;
 
-    function mount() {
-      cleanupCurrent?.();
-      cleanupCurrent = null;
+    function mountIfNeeded() {
+      if (cleanupCurrent) return;
 
       const main = document.querySelector("main.app-shell");
       if (!main) return;
@@ -109,12 +108,8 @@ export default function EventDateTimeEnhancer() {
       const timeInputs = Array.from(main.querySelectorAll('input[type="time"]'));
       const dateInput = main.querySelector('input[type="date"]');
 
-      // Only enhance the actual event form. The unsupported-city lead form has
-      // a date field but no start/end time fields.
-      if (!dateInput || timeInputs.length < 2) {
-        setTarget(null);
-        return;
-      }
+      // The unsupported-city form has a date field but no event start/end time.
+      if (!dateInput || timeInputs.length < 2) return;
 
       const [startInput, endInput] = timeInputs;
       const dateField = dateInput.closest(".field");
@@ -156,21 +151,25 @@ export default function EventDateTimeEnhancer() {
         startField.style.display = previousStartDisplay;
         endField.style.display = previousEndDisplay;
         mountNode.remove();
+        cleanupCurrent = null;
+        setTarget(null);
       };
     }
 
-    const timer = setTimeout(mount, 80);
-    const observer = new MutationObserver(() => {
-      clearTimeout(window.__javaDateTimeMutationTimer);
-      window.__javaDateTimeMutationTimer = setTimeout(mount, 60);
-    });
+    const initialTimer = setTimeout(mountIfNeeded, 120);
 
-    observer.observe(document.body, { childList: true, subtree: true });
+    // Poll lightly so switching between an active city and "Otra ciudad"
+    // can remove/recreate the form without coupling this component to form state.
+    const interval = setInterval(() => {
+      if (cleanupCurrent && target?.mountNode && !target.mountNode.isConnected) {
+        cleanupCurrent();
+      }
+      mountIfNeeded();
+    }, 700);
 
     return () => {
-      clearTimeout(timer);
-      clearTimeout(window.__javaDateTimeMutationTimer);
-      observer.disconnect();
+      clearTimeout(initialTimer);
+      clearInterval(interval);
       cleanupCurrent?.();
     };
   }, [pathname]);
@@ -193,6 +192,7 @@ export default function EventDateTimeEnhancer() {
         setEndTime(suggested);
         setNativeValue(target?.endInput, suggested);
       }
+
       setActiveTime("end");
       return;
     }
@@ -226,7 +226,11 @@ export default function EventDateTimeEnhancer() {
           <strong>
             {timeLabel(startTime)} – {timeLabel(endTime)}
           </strong>
-          <small>{duration > 0 ? `${duration} horas de servicio` : "Selecciona un horario válido"}</small>
+          <small>
+            {duration > 0
+              ? `${duration} horas de servicio`
+              : "Selecciona un horario válido"}
+          </small>
         </div>
       </div>
 
@@ -268,7 +272,7 @@ export default function EventDateTimeEnhancer() {
           </div>
 
           <div className="java-calendar-weekdays">
-            {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((day) => (
+            {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((day) => (
               <span key={day}>{day}</span>
             ))}
           </div>
