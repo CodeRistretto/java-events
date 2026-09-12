@@ -14,6 +14,7 @@ import ConfirmationPaymentCTA from "./ConfirmationPaymentCTA";
 import FloatingEventCart from "./FloatingEventCart";
 import PublicCopyEnhancer from "./PublicCopyEnhancer";
 import LoadingExperience from "./LoadingExperience";
+import ElevatorAccessCleanup from "./ElevatorAccessCleanup";
 
 class EnhancerBoundary extends React.Component {
   constructor(props) {
@@ -43,6 +44,9 @@ export default function SafeClientEnhancers() {
       </EnhancerBoundary>
       <EnhancerBoundary name="PublicCopyEnhancer">
         <PublicCopyEnhancer />
+      </EnhancerBoundary>
+      <EnhancerBoundary name="ElevatorAccessCleanup">
+        <ElevatorAccessCleanup />
       </EnhancerBoundary>
       <EnhancerBoundary name="LocationPinEnhancer">
         <LocationPinEnhancer />
