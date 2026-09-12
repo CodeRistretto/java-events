@@ -13,9 +13,7 @@ import { validateServiceAreaAddress } from "@/lib/serviceAreaValidation";
 import { normalizeMexicoPhone } from "@/lib/phone";
 
 function validEmail(value) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-    String(value || "").trim()
-  );
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
 }
 
 function createOrderNumber() {
@@ -23,10 +21,25 @@ function createOrderNumber() {
   return `JEV-${ymd}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
 }
 
+function minutesFromTime(value) {
+  if (!value) return null;
+  const [hour, minute] = String(value).split(":").map(Number);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  return hour * 60 + minute;
+}
+
+function durationFromTimes(startTime, endTime) {
+  const start = minutesFromTime(startTime);
+  const end = minutesFromTime(endTime);
+  if (start === null || end === null || end <= start) {
+    throw new Error("La hora de término debe ser posterior a la hora de inicio.");
+  }
+  return (end - start) / 60;
+}
+
 export async function POST(request) {
   try {
     const body = await request.json();
-
     const customerName = String(body.customerName || "").trim();
     const email = String(body.email || "").trim().toLowerCase();
     const phone = normalizeMexicoPhone(body.phone);
@@ -40,17 +53,16 @@ export async function POST(request) {
     if (!body.startTime) throw new Error("Selecciona la hora de inicio.");
     if (!body.endTime) throw new Error("Selecciona la hora de término.");
     if (!body.serviceAreaId) throw new Error("Selecciona una ciudad.");
+
+    const durationHours = durationFromTimes(body.startTime, body.endTime);
+
     if (
       !Number.isFinite(latitude) ||
       !Number.isFinite(longitude) ||
-      latitude < -90 ||
-      latitude > 90 ||
-      longitude < -180 ||
-      longitude > 180
+      latitude < -90 || latitude > 90 ||
+      longitude < -180 || longitude > 180
     ) {
-      throw new Error(
-        "Selecciona la ubicación exacta del evento colocando el pin en el mapa."
-      );
+      throw new Error("Selecciona la ubicación exacta del evento colocando el pin en el mapa.");
     }
     if (!body.venueName) throw new Error("Ingresa el nombre del lugar.");
     if (!body.eventAddress) throw new Error("Ingresa la calle y número.");
@@ -58,26 +70,15 @@ export async function POST(request) {
     if (!body.postalCode) throw new Error("Ingresa el código postal.");
     if (!body.indoorOutdoor) throw new Error("Indica si el evento es interior o exterior.");
     if (!body.floor) throw new Error("Indica el piso.");
-    if (body.elevator === undefined || body.elevator === null) {
-      throw new Error("Indica si hay elevador.");
-    }
+    if (body.elevator === undefined || body.elevator === null) throw new Error("Indica si hay elevador.");
     if (!body.unloadingAccess) throw new Error("Describe el acceso de descarga.");
     if (!body.setupAccessTime) throw new Error("Indica la hora de acceso para montaje.");
     if (!body.electricityDetails) throw new Error("Describe la disponibilidad eléctrica.");
-    if (body.potableWater === undefined || body.potableWater === null) {
-      throw new Error("Indica si hay agua potable.");
-    }
-    if (
-      body.waterDistanceM === "" ||
-      body.waterDistanceM === undefined ||
-      body.waterDistanceM === null
-    ) {
+    if (body.potableWater === undefined || body.potableWater === null) throw new Error("Indica si hay agua potable.");
+    if (body.waterDistanceM === "" || body.waterDistanceM === undefined || body.waterDistanceM === null) {
       throw new Error("Indica la distancia aproximada al agua.");
     }
-    if (!body.termsAccepted) {
-      throw new Error("Debes aceptar las condiciones del servicio.");
-    }
-
+    if (!body.termsAccepted) throw new Error("Debes aceptar las condiciones del servicio.");
     if (body.invoiceRequired && (!body.taxName || !body.taxRfc)) {
       throw new Error("Completa los datos fiscales para facturación.");
     }
@@ -92,30 +93,20 @@ export async function POST(request) {
     const quote = await calculateEventQuote({
       serviceAreaId: body.serviceAreaId,
       guestCount: Number(body.guestCount ?? body.guests),
-      selectedAddOns: Array.isArray(body.selectedAddOns)
-        ? body.selectedAddOns
-        : [],
+      selectedAddOns: Array.isArray(body.selectedAddOns) ? body.selectedAddOns : [],
       paymentChoice: body.paymentChoice || null,
+      durationHours,
     });
 
     const settings = await getEventSettings();
-
     await releaseExpiredInventory();
 
-    const candidates = await getCandidateCarts(
-      body.serviceAreaId,
-      body.eventDate
-    );
-
+    const candidates = await getCandidateCarts(body.serviceAreaId, body.eventDate);
     if (!candidates.length) {
-      return Response.json(
-        {
-          success: false,
-          error:
-            "Esta fecha ya no está disponible para eventos de Java Coffee Cart. Selecciona otro día.",
-        },
-        { status: 409 }
-      );
+      return Response.json({
+        success: false,
+        error: "Esta fecha ya no está disponible para eventos de Java Coffee Cart. Selecciona otro día.",
+      }, { status: 409 });
     }
 
     const holdExpiresAt = new Date(
@@ -124,6 +115,9 @@ export async function POST(request) {
 
     for (const cart of candidates) {
       const eventOrderNumber = createOrderNumber();
+      const selectedAddOnsSnapshot = quote.items
+        .filter((item) => item.itemType === "ADD_ON")
+        .map((item) => ({ code: item.code, quantity: item.quantity }));
 
       const { data: booking, error: bookingError } = await supabaseAdmin
         .from("bookings")
@@ -142,10 +136,7 @@ export async function POST(request) {
           longitude,
           event_date: body.eventDate,
           start_time: body.startTime,
-          duration_hours: Math.max(
-            1,
-            Number(body.durationHours || settings.standard_duration_hours)
-          ),
+          duration_hours: durationHours,
           guests: quote.guestCount,
           package_name: "Java Coffee Cart",
           matcha_bar: false,
@@ -174,7 +165,7 @@ export async function POST(request) {
           tax_rfc: body.invoiceRequired ? body.taxRfc : null,
           tax_usage: body.invoiceRequired ? body.taxUsage || null : null,
           terms_accepted_at: new Date().toISOString(),
-          selected_add_ons: body.selectedAddOns || [],
+          selected_add_ons: selectedAddOnsSnapshot,
           pricing_snapshot: quote,
           payment_method: body.paymentMethod || null,
         })
@@ -195,11 +186,7 @@ export async function POST(request) {
 
       if (capacityError) {
         await supabaseAdmin.from("bookings").delete().eq("id", booking.id);
-
-        if (capacityError.code === "23505") {
-          continue;
-        }
-
+        if (capacityError.code === "23505") continue;
         throw capacityError;
       }
 
@@ -219,7 +206,6 @@ export async function POST(request) {
         const { error: itemError } = await supabaseAdmin
           .from("event_order_items")
           .insert(itemRows);
-
         if (itemError) throw itemError;
       }
 
@@ -241,6 +227,11 @@ export async function POST(request) {
           minutes: Number(settings.hold_minutes),
         },
         serviceArea: quote.serviceArea,
+        duration: {
+          hours: quote.durationHours,
+          includedHours: quote.includedHours,
+          additionalHours: quote.additionalHours,
+        },
         quote: {
           total: centsToMoney(quote.totalCents),
           deposit: centsToMoney(quote.depositCents),
@@ -249,31 +240,19 @@ export async function POST(request) {
           depositCents: quote.depositCents,
           balanceCents: quote.balanceCents,
         },
-        cart: {
-          id: cart.id,
-          code: cart.code,
-          name: cart.name,
-        },
+        cart: { id: cart.id, code: cart.code, name: cart.name },
       });
     }
 
-    return Response.json(
-      {
-        success: false,
-        error:
-          "Otro cliente tomó la última disponibilidad. Selecciona otra fecha.",
-      },
-      { status: 409 }
-    );
+    return Response.json({
+      success: false,
+      error: "Otro cliente tomó la última disponibilidad. Selecciona otra fecha.",
+    }, { status: 409 });
   } catch (error) {
     console.error("Hold API error:", error);
-
-    return Response.json(
-      {
-        success: false,
-        error: error.message || "No fue posible apartar el evento.",
-      },
-      { status: 400 }
-    );
+    return Response.json({
+      success: false,
+      error: error.message || "No fue posible apartar el evento.",
+    }, { status: 400 });
   }
 }
