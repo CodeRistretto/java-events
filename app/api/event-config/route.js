@@ -10,6 +10,8 @@ export async function GET() {
       addOnsResult,
       areasResult,
       productResult,
+      coverageResult,
+      cartsResult,
     ] = await Promise.all([
       supabaseAdmin.from("event_settings").select("*").eq("id", 1).single(),
       supabaseAdmin
@@ -36,6 +38,15 @@ export async function GET() {
         .eq("code", "JAVA_COFFEE_CART")
         .eq("active", true)
         .single(),
+      supabaseAdmin
+        .from("coffee_cart_service_areas")
+        .select("service_area_id,coffee_cart_id,active_from,active_to")
+        .eq("active", true),
+      supabaseAdmin
+        .from("coffee_carts")
+        .select("id")
+        .eq("active", true)
+        .eq("status", "AVAILABLE"),
     ]);
 
     const error =
@@ -43,15 +54,29 @@ export async function GET() {
       tiersResult.error ||
       addOnsResult.error ||
       areasResult.error ||
-      productResult.error;
+      productResult.error ||
+      coverageResult.error ||
+      cartsResult.error;
 
     if (error) throw error;
 
     const now = Date.now();
+    const activeCartIds = new Set((cartsResult.data || []).map((cart) => cart.id));
+    const operationalAreaIds = new Set(
+      (coverageResult.data || [])
+        .filter((row) => {
+          if (!activeCartIds.has(row.coffee_cart_id)) return false;
+          if (row.active_from && new Date(row.active_from).getTime() > now) return false;
+          if (row.active_to && new Date(row.active_to).getTime() <= now) return false;
+          return true;
+        })
+        .map((row) => row.service_area_id)
+    );
 
     const serviceAreas = (areasResult.data || []).filter((area) => {
       if (area.activation_at && new Date(area.activation_at).getTime() > now) return false;
       if (area.deactivation_at && new Date(area.deactivation_at).getTime() <= now) return false;
+      if (!operationalAreaIds.has(area.id)) return false;
       return true;
     });
 
