@@ -45,42 +45,20 @@ export default function AdminLayout({ children }) {
           }}
         >
           <div>
-            <div
-              style={{
-                color: "#f05a22",
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: 1.5,
-              }}
-            >
+            <div style={{ color: "#f05a22", fontSize: 10, fontWeight: 700, letterSpacing: 1.5 }}>
               JAVA TIMES CAFFÉ · EVENTS
             </div>
-
-            <div
-              style={{
-                color: "#1d1d1f",
-                marginTop: 3,
-                fontSize: 16,
-                fontWeight: 650,
-                letterSpacing: "-.02em",
-              }}
-            >
+            <div style={{ color: "#1d1d1f", marginTop: 3, fontSize: 16, fontWeight: 650, letterSpacing: "-.02em" }}>
               Admin Control Center
             </div>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              alignItems: "center",
-              flexWrap: "wrap",
-            }}
-          >
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <Link href="/admin" style={linkStyle}>Admin</Link>
             <Link href="/admin/events" style={{ ...linkStyle, borderColor: "rgba(240,90,34,.25)", background: "#fff7f2" }}>Calendar & Events</Link>
             <Link href="/admin/payments" style={{ ...linkStyle, borderColor: "rgba(240,90,34,.25)", background: "#fff7f2" }}>Payments</Link>
             <Link href="/admin/service" style={{ ...linkStyle, borderColor: "rgba(240,90,34,.25)", background: "#fff7f2" }}>Service & Terms</Link>
+            <Link href="/admin/website" style={{ ...linkStyle, borderColor: "rgba(240,90,34,.25)", background: "#fff7f2" }}>Website & Images</Link>
             <Link href="/" style={linkStyle}>Cotizador</Link>
             <form action="/api/admin/logout" method="post" style={{ margin: 0 }}>
               <button
