@@ -66,6 +66,7 @@ export default function AdminLayout({ children }) {
             <Link href="/admin/service" style={highlighted}>Service & Terms</Link>
             <Link href="/admin/website" style={highlighted}>Website & Images</Link>
             <Link href="/admin/communications" style={highlighted}>Communications</Link>
+            <Link href="/admin/email-automation" style={highlighted}>Email Automation</Link>
             <Link href="/" style={linkStyle}>Cotizador</Link>
             <form action="/api/admin/logout" method="post" style={{ margin: 0 }}>
               <button
