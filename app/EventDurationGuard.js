@@ -202,11 +202,12 @@ export default function EventDurationGuard() {
   const [pending, setPending] = useState(null);
 
   const bypassRef = useRef(false);
-  const startRef = useRef("16:00");
-  const endRef = useRef("18:00");
+  const startRef = useRef("");
+  const endRef = useRef("");
   const startChosenRef = useRef(false);
   const endChosenRef = useRef(false);
   const lastQuotedSignatureRef = useRef(null);
+  const minimumLeadDaysRef = useRef(7);
 
   useEffect(() => {
     if (pathname !== "/") return;
@@ -225,6 +226,7 @@ export default function EventDurationGuard() {
           vatBps: Number(data.settings?.vat_bps || 0),
           minimumLeadDays: Number(data.settings?.minimum_lead_days ?? 7),
         };
+        minimumLeadDaysRef.current = next.minimumLeadDays;
         setConfig(next);
         setTimeout(() => enforceMinimumLeadTime(next.minimumLeadDays), 0);
       })
@@ -234,13 +236,13 @@ export default function EventDurationGuard() {
       syncTimesFromDom(startRef, endRef);
       hideManualExtraHourCard();
       setSequenceState(startChosenRef.current, endChosenRef.current);
-      enforceMinimumLeadTime(7);
+      enforceMinimumLeadTime(minimumLeadDaysRef.current);
     }, 120);
 
     const observer = new MutationObserver(() => {
       hideManualExtraHourCard();
       setSequenceState(startChosenRef.current, endChosenRef.current);
-      enforceMinimumLeadTime(7);
+      enforceMinimumLeadTime(minimumLeadDaysRef.current);
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
