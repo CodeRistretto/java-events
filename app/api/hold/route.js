@@ -15,6 +15,7 @@ import {
   assertMinimumLeadTime,
   balancePaymentDeadline,
 } from "@/lib/eventBookingRules";
+import { sendReservationReceivedEmail } from "@/lib/eventReservationEmails";
 
 function validEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
@@ -70,20 +71,45 @@ export async function POST(request) {
     ) {
       throw new Error("Selecciona la ubicación exacta del evento colocando el pin en el mapa.");
     }
+
     if (!body.venueName) throw new Error("Ingresa el nombre del lugar.");
     if (!body.eventAddress) throw new Error("Ingresa la calle y número.");
     if (!body.neighborhood) throw new Error("Ingresa la colonia.");
     if (!body.postalCode) throw new Error("Ingresa el código postal.");
-    if (!body.indoorOutdoor) throw new Error("Indica si el evento es interior o exterior.");
+    if (!["INDOOR", "OUTDOOR"].includes(body.indoorOutdoor)) {
+      throw new Error("Indica si el Coffee Cart estará en interior o exterior.");
+    }
     if (!body.floor) throw new Error("Indica el piso.");
-    if (body.elevator === undefined || body.elevator === null) throw new Error("Indica si hay elevador.");
+    if (body.elevator === undefined || body.elevator === null) {
+      throw new Error("Indica si hay elevador.");
+    }
     if (!body.unloadingAccess) throw new Error("Describe el acceso de descarga.");
     if (!body.setupAccessTime) throw new Error("Indica la hora de acceso para montaje.");
-    if (!body.electricityDetails) throw new Error("Describe la disponibilidad eléctrica.");
-    if (body.potableWater === undefined || body.potableWater === null) throw new Error("Indica si hay agua potable.");
-    if (body.waterDistanceM === "" || body.waterDistanceM === undefined || body.waterDistanceM === null) {
-      throw new Error("Indica la distancia aproximada al agua.");
+    if (!body.electricityDetails) {
+      throw new Error("Describe la conexión eléctrica disponible.");
     }
+
+    const minimumPassageWidthCm = Number(body.minimumPassageWidthCm);
+    const electricityDistanceM = Number(body.electricityDistanceM);
+    const requiredPassageCm = Number(settings.minimum_passage_width_cm ?? 100);
+
+    if (!body.accessRequirementsAccepted) {
+      throw new Error(
+        "Debes confirmar que el lugar cumple con el espacio y acceso requerido para el Coffee Cart."
+      );
+    }
+    if (
+      !Number.isFinite(minimumPassageWidthCm) ||
+      minimumPassageWidthCm < requiredPassageCm
+    ) {
+      throw new Error(
+        `El recorrido del equipo necesita al menos ${requiredPassageCm} cm libres en puertas, pasillos y elevador.`
+      );
+    }
+    if (!Number.isFinite(electricityDistanceM) || electricityDistanceM < 0) {
+      throw new Error("Indica la distancia aproximada a la conexión eléctrica.");
+    }
+
     if (!body.termsAccepted) throw new Error("Debes aceptar las condiciones del servicio.");
     if (body.invoiceRequired && (!body.taxName || !body.taxRfc)) {
       throw new Error("Completa los datos fiscales para facturación.");
@@ -108,10 +134,14 @@ export async function POST(request) {
 
     const candidates = await getCandidateCarts(body.serviceAreaId, body.eventDate);
     if (!candidates.length) {
-      return Response.json({
-        success: false,
-        error: "Esta fecha ya no está disponible para eventos de Java Coffee Cart. Selecciona otro día.",
-      }, { status: 409 });
+      return Response.json(
+        {
+          success: false,
+          error:
+            "Esta fecha ya no está disponible para eventos de Java Coffee Cart. Selecciona otro día.",
+        },
+        { status: 409 }
+      );
     }
 
     const holdExpiresAt = new Date(
@@ -168,8 +198,14 @@ export async function POST(request) {
           unloading_access: body.unloadingAccess,
           setup_access_time: body.setupAccessTime,
           electricity_details: body.electricityDetails,
-          potable_water: Boolean(body.potableWater),
-          water_distance_m: Number(body.waterDistanceM),
+          electricity_distance_m: electricityDistanceM,
+          minimum_passage_width_cm: minimumPassageWidthCm,
+          access_requirements_accepted_at: new Date().toISOString(),
+          service_terms_version:
+            body.serviceTermsVersion || settings.service_terms_version || "2026-09-11",
+          marketing_consent: Boolean(body.marketingConsent),
+          potable_water: true,
+          water_distance_m: 0,
           invoice_required: Boolean(body.invoiceRequired),
           tax_name: body.invoiceRequired ? body.taxName : null,
           tax_rfc: body.invoiceRequired ? body.taxRfc : null,
@@ -185,6 +221,12 @@ export async function POST(request) {
               cupSizeOz: Number(settings.cup_size_oz ?? 12),
               includedHotDrinks: settings.included_hot_drinks || [],
               includedColdDrinks: settings.included_cold_drinks || [],
+              cartOperatingLengthCm: Number(settings.cart_operating_length_cm ?? 320),
+              cartOperatingWidthCm: Number(settings.cart_operating_width_cm ?? 150),
+              minimumPassageWidthCm: requiredPassageCm,
+              rescheduleExtraHours: Number(settings.reschedule_extra_hours ?? 2),
+              serviceTermsVersion:
+                body.serviceTermsVersion || settings.service_terms_version || "2026-09-11",
             },
           },
           payment_method: body.paymentMethod || null,
@@ -235,12 +277,26 @@ export async function POST(request) {
         assignment_type: "PRIMARY",
       });
 
+      let reservationEmail = { sent: false, skipped: true };
+      try {
+        reservationEmail = await sendReservationReceivedEmail(booking);
+      } catch (emailError) {
+        console.error("Reservation received email error", {
+          bookingId: booking.id,
+          error: emailError.message,
+        });
+      }
+
       return Response.json({
         success: true,
         bookingId: booking.id,
         eventOrderNumber,
         holdExpiresAt,
         paymentDeadlineAt,
+        reservationEmail: {
+          sent: Boolean(reservationEmail?.sent),
+          skipped: Boolean(reservationEmail?.skipped),
+        },
         hold: {
           bookingId: booking.id,
           expiresAt: holdExpiresAt,
@@ -256,7 +312,8 @@ export async function POST(request) {
         bookingRules: {
           minimumLeadDays: Number(settings.minimum_lead_days ?? 7),
           balanceDueDaysBefore: Number(settings.balance_due_days_before ?? 3),
-          cancellationRefundPercent: Number(settings.cancellation_refund_bps ?? 5000) / 100,
+          cancellationRefundPercent:
+            Number(settings.cancellation_refund_bps ?? 5000) / 100,
         },
         quote: {
           total: centsToMoney(quote.totalCents),
@@ -270,15 +327,21 @@ export async function POST(request) {
       });
     }
 
-    return Response.json({
-      success: false,
-      error: "Otro cliente tomó la última disponibilidad. Selecciona otra fecha.",
-    }, { status: 409 });
+    return Response.json(
+      {
+        success: false,
+        error: "Otro cliente tomó la última disponibilidad. Selecciona otra fecha.",
+      },
+      { status: 409 }
+    );
   } catch (error) {
     console.error("Hold API error:", error);
-    return Response.json({
-      success: false,
-      error: error.message || "No fue posible apartar el evento.",
-    }, { status: 400 });
+    return Response.json(
+      {
+        success: false,
+        error: error.message || "No fue posible apartar el evento.",
+      },
+      { status: 400 }
+    );
   }
 }
