@@ -1,6 +1,7 @@
 import crypto from "crypto";
 
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { deliverMetaConversion } from "@/lib/metaConversions";
 
 export const runtime = "nodejs";
 
@@ -68,6 +69,83 @@ async function addTimeline({
   if (error) throw error;
 }
 
+function bookingAttribution(booking) {
+  return {
+    utm_source: booking.utm_source,
+    utm_medium: booking.utm_medium,
+    utm_campaign: booking.utm_campaign,
+    utm_content: booking.utm_content,
+    utm_term: booking.utm_term,
+    fbclid: booking.fbclid,
+    fbc: booking.fbc,
+    fbp: booking.fbp,
+    gclid: booking.gclid,
+    gbraid: booking.gbraid,
+    wbraid: booking.wbraid,
+    ttclid: booking.ttclid,
+    landing_page: booking.landing_page,
+    referrer: booking.referrer,
+    client_session_id: booking.client_session_id,
+    test_event_code: booking.meta_test_event_code,
+  };
+}
+
+async function trackPaidDeposit({ booking, payment, payload, shopifyOrderId }) {
+  const appBaseUrl = (
+    process.env.APP_BASE_URL || "https://java-events-inky.vercel.app"
+  ).replace(/\/+$/, "");
+  const processedAt = Date.parse(payload.processed_at || payload.created_at || "");
+  const orderIdentity = payload.id || String(shopifyOrderId).split("/").pop();
+
+  return deliverMetaConversion({
+    bookingId: booking.id,
+    paymentId: payment.id,
+    eventName: "JavaCoffeeCartDepositPaid",
+    eventId: `java-deposit-${orderIdentity}`,
+    eventTime: Number.isFinite(processedAt)
+      ? Math.floor(processedAt / 1000)
+      : Math.floor(Date.now() / 1000),
+    eventSourceUrl: booking.landing_page || `${appBaseUrl}/confirmation/${booking.id}`,
+    attribution: bookingAttribution(booking),
+    customer: {
+      name: booking.customer_name,
+      email: booking.email,
+      phone: booking.phone,
+      city: booking.city,
+      state: booking.state,
+      postalCode: booking.postal_code,
+      externalId: booking.client_session_id || booking.id,
+      clientIpAddress: booking.client_ip_address,
+      clientUserAgent: booking.client_user_agent,
+    },
+    customData: {
+      content_name: "Java Coffee Cart — Anticipo pagado",
+      content_category: "Event deposit",
+      value: Number(payment.amount_cents || 0) / 100,
+      currency: "MXN",
+      event_total: Number(booking.total || 0),
+      booking_id: booking.id,
+      event_order_number: booking.event_order_number || "",
+      shopify_order_id: String(shopifyOrderId),
+      event_type: booking.event_type || "",
+      event_city: booking.city || "",
+      guest_count: Number(booking.guests || 0),
+    },
+  });
+}
+
+async function trackPaidDepositSafely(args) {
+  try {
+    await trackPaidDeposit(args);
+  } catch (error) {
+    console.error("JavaCoffeeCartDepositPaid Meta tracking error", {
+      bookingId: args.booking.id,
+      shopifyOrderId: args.shopifyOrderId,
+      error: error.message,
+    });
+  }
+}
+
 export async function POST(request) {
   try {
     const rawBody = await request.text();
@@ -131,7 +209,33 @@ export async function POST(request) {
         deposit_cents,
         shopify_order_id,
         shopify_balance_order_id,
-        confirmed_at
+        confirmed_at,
+        customer_name,
+        email,
+        phone,
+        event_type,
+        city,
+        state,
+        postal_code,
+        guests,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        utm_content,
+        utm_term,
+        fbclid,
+        fbc,
+        fbp,
+        gclid,
+        gbraid,
+        wbraid,
+        ttclid,
+        landing_page,
+        referrer,
+        client_session_id,
+        client_ip_address,
+        client_user_agent,
+        meta_test_event_code
       `)
       .eq("id", bookingId)
       .maybeSingle();
@@ -150,7 +254,7 @@ export async function POST(request) {
 
     const { data: existingByOrder, error: existingError } = await supabaseAdmin
       .from("event_payments")
-      .select("id,status")
+      .select("id,status,amount_cents")
       .eq("provider", "SHOPIFY")
       .eq("provider_payment_id", shopifyOrderId)
       .maybeSingle();
@@ -158,6 +262,14 @@ export async function POST(request) {
     if (existingError) throw existingError;
 
     if (existingByOrder?.status === "PAID") {
+      if (paymentType === "DEPOSIT") {
+        await trackPaidDepositSafely({
+          booking,
+          payment: existingByOrder,
+          payload,
+          shopifyOrderId,
+        });
+      }
       return new Response("Already processed", { status: 200 });
     }
 
@@ -322,6 +434,15 @@ export async function POST(request) {
         webhook_id: webhookId,
       },
     });
+
+    if (paymentType === "DEPOSIT") {
+      await trackPaidDepositSafely({
+        booking,
+        payment,
+        payload,
+        shopifyOrderId,
+      });
+    }
 
     console.log("JAVA EVENT PAYMENT CONFIRMED", {
       bookingId,

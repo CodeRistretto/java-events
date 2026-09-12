@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  getAttribution,
+  initializeAttribution,
+  nextTrackingEventId,
+  postParentTracking,
+} from "@/lib/clientAttribution";
 
 function money(value) {
   return new Intl.NumberFormat("es-MX", {
@@ -225,12 +231,32 @@ export default function Home() {
   });
 
   useEffect(() => {
-    loadConfig();
+    const attribution = initializeAttribution();
+    const sentKey = `java_quote_started_${attribution.client_session_id}`;
+
+    if (window.sessionStorage.getItem(sentKey)) return;
+    window.sessionStorage.setItem(sentKey, "1");
+
+    const eventId = `java-javaquotestarted-${attribution.client_session_id}`;
+    postParentTracking("JavaQuoteStarted", {
+      content_name: "Java Coffee Cart",
+      currency: "MXN",
+    });
+
+    fetch("/api/tracking/meta", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        eventName: "JavaQuoteStarted",
+        eventId,
+        attribution,
+      }),
+      keepalive: true,
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
     if (!hold?.holdExpiresAt) {
-      setRemaining(null);
       return;
     }
 
@@ -289,6 +315,11 @@ export default function Home() {
       setError(e.message);
     }
   }
+
+  useEffect(() => {
+    const timer = window.setTimeout(loadConfig, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   function update(key, value) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -387,6 +418,12 @@ export default function Home() {
           serviceAreaId: form.serviceAreaId,
           guestCount: Number(form.guestCount),
           selectedAddOns: form.selectedAddOns,
+          eventType: form.eventType,
+          eventDate: form.eventDate,
+          startTime: form.startTime,
+          endTime: form.endTime,
+          attribution: getAttribution(),
+          trackingEventId: nextTrackingEventId("JavaQuoteGenerated"),
         }),
       });
 
@@ -397,6 +434,11 @@ export default function Home() {
       }
 
       setQuote(data);
+      postParentTracking("JavaQuoteGenerated", {
+        value: Number(data.quote.total),
+        currency: "MXN",
+        guest_count: Number(form.guestCount),
+      });
       setSuccess("Precio calculado. Revisa el desglose antes de continuar.");
     } catch (e) {
       setError(e.message);
@@ -472,6 +514,8 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          attribution: getAttribution(),
+          trackingEventId: nextTrackingEventId("JavaEventHold"),
           durationHours: hours,
           setupAccessTime: setupAccessIso,
           elevator:
@@ -499,6 +543,13 @@ export default function Home() {
         bookingId: data.bookingId,
         eventOrderNumber: data.eventOrderNumber,
         holdExpiresAt: data.holdExpiresAt,
+      });
+
+      postParentTracking("JavaEventHold", {
+        booking_id: data.bookingId,
+        value: Number(data.quote.total),
+        deposit_value: Number(data.quote.deposit),
+        currency: "MXN",
       });
 
       setQuote((current) => ({
@@ -536,7 +587,10 @@ export default function Home() {
       const response = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bookingId: hold.bookingId }),
+        body: JSON.stringify({
+          bookingId: hold.bookingId,
+          attribution: getAttribution(),
+        }),
       });
 
       const data = await response.json();
@@ -558,6 +612,12 @@ export default function Home() {
         if (paymentWindow && !paymentWindow.closed) paymentWindow.close();
         throw new Error("Shopify no devolvió una URL de pago.");
       }
+
+      postParentTracking("InitiateCheckout", {
+        booking_id: hold.bookingId,
+        value: Number(quote?.quote?.deposit || 0),
+        currency: "MXN",
+      });
 
       if (paymentWindow && !paymentWindow.closed) {
         paymentWindow.location.replace(data.checkoutUrl);

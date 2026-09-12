@@ -2,6 +2,10 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { shopifyGraphQL } from "@/lib/shopify";
 import { ensureShopifyCustomer } from "@/lib/shopifyCustomer";
 import { normalizeMexicoPhone } from "@/lib/phone";
+import {
+  deliverMetaConversion,
+  requestContext,
+} from "@/lib/metaConversions";
 
 export const runtime = "nodejs";
 
@@ -51,6 +55,85 @@ function eventAddressInput(booking, normalizedPhone) {
     countryCode: "MX",
     phone: normalizedPhone,
   };
+}
+
+function trackingDraftAttributes(booking) {
+  const fields = [
+    ["utm_source", booking.utm_source],
+    ["utm_medium", booking.utm_medium],
+    ["utm_campaign", booking.utm_campaign],
+    ["utm_content", booking.utm_content],
+    ["utm_term", booking.utm_term],
+    ["fbclid", booking.fbclid],
+    ["gclid", booking.gclid],
+    ["gbraid", booking.gbraid],
+    ["wbraid", booking.wbraid],
+    ["ttclid", booking.ttclid],
+    ["client_session_id", booking.client_session_id],
+    ["landing_page", booking.landing_page],
+    ["referrer", booking.referrer],
+  ];
+
+  return fields
+    .filter(([, value]) => String(value || "").trim())
+    .map(([key, value]) => ({ key, value: String(value).slice(0, 255) }));
+}
+
+function bookingAttribution(booking) {
+  return {
+    utm_source: booking.utm_source,
+    utm_medium: booking.utm_medium,
+    utm_campaign: booking.utm_campaign,
+    utm_content: booking.utm_content,
+    utm_term: booking.utm_term,
+    fbclid: booking.fbclid,
+    fbc: booking.fbc,
+    fbp: booking.fbp,
+    gclid: booking.gclid,
+    gbraid: booking.gbraid,
+    wbraid: booking.wbraid,
+    ttclid: booking.ttclid,
+    landing_page: booking.landing_page,
+    referrer: booking.referrer,
+    client_session_id: booking.client_session_id,
+    test_event_code: booking.meta_test_event_code,
+  };
+}
+
+async function trackInitiateCheckout({ booking, depositCents, request, fallbackUrl }) {
+  const variantId = String(JAVA_EVENTS_VARIANT_ID).split("/").pop();
+
+  await deliverMetaConversion({
+    bookingId: booking.id,
+    eventName: "InitiateCheckout",
+    eventId: `java-checkout-${booking.id}`,
+    eventSourceUrl: booking.landing_page || fallbackUrl,
+    attribution: bookingAttribution(booking),
+    context: requestContext(request),
+    customer: {
+      name: booking.customer_name,
+      email: booking.email,
+      phone: booking.phone,
+      city: booking.city,
+      state: booking.state,
+      postalCode: booking.postal_code,
+      externalId: booking.client_session_id || booking.id,
+      clientIpAddress: booking.client_ip_address,
+      clientUserAgent: booking.client_user_agent,
+    },
+    customData: {
+      content_name: "Java Coffee Cart — Events",
+      content_category: "Event deposit",
+      content_type: "product",
+      content_ids: [variantId],
+      num_items: 1,
+      value: Number(centsToMoney(depositCents)),
+      currency: "MXN",
+      event_total: Number(booking.total || 0),
+      booking_id: booking.id,
+      event_order_number: booking.event_order_number || "",
+    },
+  });
 }
 
 function buildLineItem({
@@ -205,6 +288,7 @@ function baseDraftInput({
         key: "confirmation_url",
         value: confirmationUrl,
       },
+      ...trackingDraftAttributes(booking),
     ],
 
     lineItems: [lineItem],
@@ -468,7 +552,25 @@ export async function POST(request) {
         hold_expires_at,
         shopify_customer_id,
         shopify_draft_order_id,
-        shopify_order_id
+        shopify_order_id,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        utm_content,
+        utm_term,
+        fbclid,
+        fbc,
+        fbp,
+        gclid,
+        gbraid,
+        wbraid,
+        ttclid,
+        landing_page,
+        referrer,
+        client_session_id,
+        client_ip_address,
+        client_user_agent,
+        meta_test_event_code
       `)
       .eq("id", bookingId)
       .maybeSingle();
@@ -487,8 +589,9 @@ export async function POST(request) {
       );
     }
 
-    const appBaseUrl =
-      process.env.APP_BASE_URL || "http://localhost:3000";
+    const appBaseUrl = (
+      process.env.APP_BASE_URL || "http://localhost:3000"
+    ).replace(/\/+$/, "");
 
     const confirmationUrl =
       `${appBaseUrl}/confirmation/${booking.id}`;
@@ -655,6 +758,20 @@ export async function POST(request) {
       }
 
       if (existingDraft?.invoiceUrl) {
+        try {
+          await trackInitiateCheckout({
+            booking,
+            depositCents,
+            request,
+            fallbackUrl: appBaseUrl,
+          });
+        } catch (trackingError) {
+          console.error("InitiateCheckout Meta tracking error", {
+            bookingId: booking.id,
+            error: trackingError.message,
+          });
+        }
+
         return Response.json({
           success: true,
           checkoutUrl: existingDraft.invoiceUrl,
@@ -824,6 +941,20 @@ export async function POST(request) {
 
     if (updateError) {
       throw updateError;
+    }
+
+    try {
+      await trackInitiateCheckout({
+        booking,
+        depositCents,
+        request,
+        fallbackUrl: appBaseUrl,
+      });
+    } catch (trackingError) {
+      console.error("InitiateCheckout Meta tracking error", {
+        bookingId: booking.id,
+        error: trackingError.message,
+      });
     }
 
     return Response.json({

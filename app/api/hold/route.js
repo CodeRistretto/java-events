@@ -16,6 +16,11 @@ import {
   balancePaymentDeadline,
 } from "@/lib/eventBookingRules";
 import { sendReservationReceivedEmail } from "@/lib/eventReservationEmails";
+import {
+  deliverMetaConversion,
+  normalizeAttribution,
+  requestContext,
+} from "@/lib/metaConversions";
 
 function validEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
@@ -50,6 +55,8 @@ export async function POST(request) {
     const phone = normalizeMexicoPhone(body.phone);
     const latitude = Number(body.latitude);
     const longitude = Number(body.longitude);
+    const attribution = normalizeAttribution(body.attribution);
+    const clientContext = requestContext(request);
 
     if (!customerName) throw new Error("Escribe el nombre completo.");
     if (!validEmail(email)) throw new Error("Ingresa un correo electrónico válido.");
@@ -230,6 +237,27 @@ export async function POST(request) {
             },
           },
           payment_method: body.paymentMethod || null,
+          utm_source: attribution.utm_source,
+          utm_medium: attribution.utm_medium,
+          utm_campaign: attribution.utm_campaign,
+          utm_content: attribution.utm_content,
+          utm_term: attribution.utm_term,
+          fbclid: attribution.fbclid,
+          fbc: attribution.fbc,
+          fbp: attribution.fbp,
+          gclid: attribution.gclid,
+          gbraid: attribution.gbraid,
+          wbraid: attribution.wbraid,
+          ttclid: attribution.ttclid,
+          landing_page: attribution.landing_page,
+          referrer: attribution.referrer,
+          client_session_id: attribution.client_session_id,
+          client_ip_address: clientContext.clientIpAddress,
+          client_user_agent: clientContext.clientUserAgent,
+          meta_test_event_code: attribution.test_event_code,
+          attribution_captured_at: attribution.client_session_id
+            ? attribution.captured_at || new Date().toISOString()
+            : null,
         })
         .select("*")
         .single();
@@ -276,6 +304,43 @@ export async function POST(request) {
         coffee_cart_id: cart.id,
         assignment_type: "PRIMARY",
       });
+
+      try {
+        await deliverMetaConversion({
+          bookingId: booking.id,
+          eventName: "JavaEventHold",
+          eventId: `java-hold-${booking.id}`,
+          eventSourceUrl: attribution.landing_page,
+          attribution,
+          context: clientContext,
+          customer: {
+            name: customerName,
+            email,
+            phone,
+            city: quote.serviceArea.city,
+            state: quote.serviceArea.state,
+            postalCode: body.postalCode,
+            externalId: attribution.client_session_id || booking.id,
+          },
+          customData: {
+            content_name: "Java Coffee Cart",
+            content_category: "Event reservation hold",
+            value: Number(centsToMoney(quote.totalCents)),
+            currency: "MXN",
+            deposit_value: Number(centsToMoney(quote.depositCents)),
+            booking_id: booking.id,
+            event_order_number: eventOrderNumber,
+            event_type: String(body.eventType || ""),
+            event_city: quote.serviceArea.city,
+            guest_count: quote.guestCount,
+          },
+        });
+      } catch (trackingError) {
+        console.error("JavaEventHold Meta tracking error", {
+          bookingId: booking.id,
+          error: trackingError.message,
+        });
+      }
 
       let reservationEmail = { sent: false, skipped: true };
       try {

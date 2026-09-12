@@ -2,6 +2,29 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+Create `.env.local` with the existing Shopify and Supabase credentials plus:
+
+```bash
+META_DATASET_ID=1363452858095225
+META_CAPI_ACCESS_TOKEN=your_meta_conversions_api_token
+# Optional: only while using Meta Events Manager > Test events
+META_CAPI_TEST_EVENT_CODE=
+```
+
+Before deploying the Meta attribution code, apply
+`supabase/migrations/009_meta_attribution_and_conversions.sql` in Supabase.
+
+Java Events sends these server-side events to Meta:
+
+- `JavaQuoteStarted`
+- `JavaQuoteGenerated` (full event value)
+- `JavaEventHold` (full event and deposit values)
+- `InitiateCheckout` (deposit value)
+- `JavaCoffeeCartDepositPaid` (actual deposit paid)
+
+The paid-deposit event is intentionally custom. Shopify remains the only source
+of the standard `Purchase` event, which prevents duplicate purchases in Meta.
+
 First, run the development server:
 
 ```bash

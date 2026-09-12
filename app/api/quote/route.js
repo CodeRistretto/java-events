@@ -1,4 +1,9 @@
 import { calculateEventQuote, centsToMoney } from "@/lib/eventPricing";
+import {
+  normalizeAttribution,
+  requestContext,
+  sendMetaConversion,
+} from "@/lib/metaConversions";
 
 function minutesFromTime(value) {
   if (!value) return null;
@@ -31,6 +36,32 @@ export async function POST(request) {
       paymentChoice: body.paymentChoice || null,
       durationHours,
     });
+
+    const attribution = normalizeAttribution(body.attribution);
+    if (body.trackingEventId && attribution.client_session_id) {
+      try {
+        await sendMetaConversion({
+          eventName: "JavaQuoteGenerated",
+          eventId: String(body.trackingEventId).slice(0, 200),
+          eventSourceUrl: attribution.landing_page,
+          attribution,
+          context: requestContext(request),
+          customer: { externalId: attribution.client_session_id },
+          customData: {
+            content_name: "Java Coffee Cart",
+            content_category: "Event service quote",
+            value: Number(centsToMoney(quote.totalCents)),
+            currency: "MXN",
+            deposit_value: Number(centsToMoney(quote.depositCents)),
+            guest_count: quote.guestCount,
+            event_type: String(body.eventType || ""),
+            event_city: quote.serviceArea.city,
+          },
+        });
+      } catch (trackingError) {
+        console.error("JavaQuoteGenerated Meta tracking error", trackingError);
+      }
+    }
 
     return Response.json({
       success: true,

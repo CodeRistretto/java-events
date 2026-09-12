@@ -22,8 +22,20 @@
     "utm_term",
     "gclid",
     "fbclid",
+    "gbraid",
+    "wbraid",
     "ttclid",
+    "test_event_code",
   ];
+
+  function readCookie(name) {
+    const prefix = `${name}=`;
+    const match = document.cookie
+      .split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith(prefix));
+    return match ? decodeURIComponent(match.slice(prefix.length)) : "";
+  }
 
   function buildAppUrl() {
     const url = new URL("/", appOrigin);
@@ -35,6 +47,16 @@
       const value = current.searchParams.get(key);
       if (value) url.searchParams.set(key, value);
     }
+
+    const fbp = readCookie("_fbp");
+    const storedFbc = readCookie("_fbc");
+    const fbclid = current.searchParams.get("fbclid");
+    const fbc = storedFbc || (fbclid ? `fb.1.${Date.now()}.${fbclid}` : "");
+
+    if (fbp) url.searchParams.set("fbp", fbp);
+    if (fbc) url.searchParams.set("fbc", fbc);
+    url.searchParams.set("landing_page", current.href.split("#")[0]);
+    if (document.referrer) url.searchParams.set("referrer", document.referrer);
 
     return url.toString();
   }
@@ -301,6 +323,20 @@
   }
 
   host.querySelector(".jev-open")?.addEventListener("click", openWidget);
+
+  window.addEventListener("message", (event) => {
+    if (event.origin !== new URL(appOrigin).origin) return;
+    if (event.data?.type !== "JAVA_EVENTS_TRACK" || !event.data?.eventName) return;
+
+    const detail = {
+      event: event.data.eventName,
+      ...(event.data.customData || {}),
+    };
+
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push(detail);
+    window.dispatchEvent(new CustomEvent("java-events:track", { detail }));
+  });
 
   window.JavaEvents = {
     open: openWidget,
