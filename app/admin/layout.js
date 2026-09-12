@@ -17,6 +17,12 @@ const linkStyle = {
   boxShadow: "0 2px 8px rgba(0,0,0,.025)",
 };
 
+const highlighted = {
+  ...linkStyle,
+  borderColor: "rgba(240,90,34,.25)",
+  background: "#fff7f2",
+};
+
 export default function AdminLayout({ children }) {
   return (
     <div style={{ minHeight: "100vh", background: "#f5f5f7" }}>
@@ -55,10 +61,11 @@ export default function AdminLayout({ children }) {
 
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <Link href="/admin" style={linkStyle}>Admin</Link>
-            <Link href="/admin/events" style={{ ...linkStyle, borderColor: "rgba(240,90,34,.25)", background: "#fff7f2" }}>Calendar & Events</Link>
-            <Link href="/admin/payments" style={{ ...linkStyle, borderColor: "rgba(240,90,34,.25)", background: "#fff7f2" }}>Payments</Link>
-            <Link href="/admin/service" style={{ ...linkStyle, borderColor: "rgba(240,90,34,.25)", background: "#fff7f2" }}>Service & Terms</Link>
-            <Link href="/admin/website" style={{ ...linkStyle, borderColor: "rgba(240,90,34,.25)", background: "#fff7f2" }}>Website & Images</Link>
+            <Link href="/admin/events" style={highlighted}>Calendar & Events</Link>
+            <Link href="/admin/payments" style={highlighted}>Payments</Link>
+            <Link href="/admin/service" style={highlighted}>Service & Terms</Link>
+            <Link href="/admin/website" style={highlighted}>Website & Images</Link>
+            <Link href="/admin/communications" style={highlighted}>Communications</Link>
             <Link href="/" style={linkStyle}>Cotizador</Link>
             <form action="/api/admin/logout" method="post" style={{ margin: 0 }}>
               <button
