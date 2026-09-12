@@ -40,6 +40,10 @@ function button(pattern) {
   );
 }
 
+function selectedEventDate() {
+  return document.querySelector(".java-calendar-days button.selected")?.dataset?.javaDate || "";
+}
+
 function pinReady() {
   try {
     const value = JSON.parse(sessionStorage.getItem("java-event-location-pin") || "null");
@@ -51,16 +55,6 @@ function pinReady() {
 
 function quoteReady() {
   return Boolean(document.querySelector("main.app-shell .quote-money"));
-}
-
-function availabilityReady() {
-  return Array.from(document.querySelectorAll("main.app-shell .status.success")).some((node) =>
-    /disponible/i.test(node.textContent || "")
-  );
-}
-
-function currentErrorText() {
-  return String(document.querySelector("main.app-shell .status.error")?.textContent || "").trim();
 }
 
 function termsCheckbox() {
@@ -77,9 +71,13 @@ function validate(step) {
     const city = control("Ciudad del evento");
     if (!hasValue(city)) return ["Selecciona la ciudad del evento.", city];
 
-    const date = document.querySelector(".java-datetime-summary > span")?.textContent || "";
-    if (!date || /selecciona una fecha/i.test(date)) {
+    const selectedButton = document.querySelector(".java-calendar-days button.selected");
+    const date = selectedEventDate();
+    if (!date || !selectedButton) {
       return ["Selecciona la fecha del evento.", document.querySelector(".java-calendar-card")];
+    }
+    if (selectedButton.classList.contains("java-date-unavailable")) {
+      return ["Esa fecha ya no está disponible. Selecciona otra fecha.", document.querySelector(".java-calendar-card")];
     }
     if (document.body.dataset.javaStartChosen !== "1") {
       return [
@@ -91,12 +89,6 @@ function validate(step) {
       return [
         "Ahora selecciona la hora de término.",
         document.querySelector(".java-time-tabs button:nth-child(2)"),
-      ];
-    }
-    if (!availabilityReady()) {
-      return [
-        "Verifica la disponibilidad de la fecha antes de continuar.",
-        button(/verificar disponibilidad/i),
       ];
     }
   }
@@ -213,10 +205,19 @@ function targetForError(text) {
   if (/electricidad/i.test(text)) return control("Conexión eléctrica disponible");
   if (/montaje/i.test(text)) return document.querySelector("[data-java-setup-select]");
   if (/condiciones/i.test(text)) return termsCheckbox();
+  if (/fecha|disponib/i.test(text)) return document.querySelector(".java-calendar-card");
   if (/pin|ubicación exacta|ubicacion exacta/i.test(text)) {
     return document.querySelector(".java-location-picker");
   }
   return null;
+}
+
+function syncLegacyAvailabilityState() {
+  const verifyButton = button(/verificar disponibilidad|revisando fecha/i);
+  if (!verifyButton || verifyButton.disabled) return;
+  try {
+    verifyButton.click();
+  } catch {}
 }
 
 export default function QuoteFlowWizard() {
@@ -240,61 +241,68 @@ export default function QuoteFlowWizard() {
     return true;
   }
 
-  function verifyAvailabilityAndContinue() {
-    const verifyButton = button(/verificar disponibilidad/i);
-    if (!verifyButton || verifyButton.disabled) {
-      alertUser([
-        "No pudimos iniciar la verificación de disponibilidad. Intenta nuevamente.",
-        verifyButton,
-      ]);
+  async function verifyAvailabilityAndContinue() {
+    const city = control("Ciudad del evento");
+    const eventDate = selectedEventDate();
+    if (!city?.value || !eventDate) {
+      alertUser(["Selecciona ciudad y fecha antes de continuar.", document.querySelector(".java-calendar-card")]);
       return;
     }
 
     setCheckingAvailability(true);
-    setMessage("Verificando disponibilidad de la fecha…");
+    setMessage("Confirmando disponibilidad en tiempo real…");
     lastErrorRef.current = "";
-    verifyButton.click();
 
-    const startedAt = Date.now();
-    const interval = window.setInterval(() => {
-      if (availabilityReady()) {
-        window.clearInterval(interval);
-        setCheckingAvailability(false);
-        setMessage("");
-        setStep(2);
+    try {
+      const response = await fetch("/api/availability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serviceAreaId: city.value, eventDate }),
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data?.success) {
+        throw new Error(data?.error || "No fue posible verificar la disponibilidad.");
+      }
+
+      if (!data.available) {
+        window.dispatchEvent(
+          new CustomEvent("java:calendar-mark-unavailable", {
+            detail: { date: eventDate, state: data.dateState || "SOLD_OUT" },
+          })
+        );
+        setMessage(data.message || "Esa fecha no está disponible. Selecciona otra fecha.");
+        focusNode(document.querySelector(".java-calendar-card"));
         return;
       }
 
-      const errorText = currentErrorText();
-      if (errorText) {
-        window.clearInterval(interval);
-        setCheckingAvailability(false);
-        setMessage(errorText);
-        focusNode(targetForError(errorText) || verifyButton);
-        return;
-      }
-
-      if (Date.now() - startedAt > 12000) {
-        window.clearInterval(interval);
-        setCheckingAvailability(false);
-        setMessage("La verificación está tardando más de lo esperado. Intenta nuevamente.");
-        focusNode(verifyButton);
-      }
-    }, 250);
+      document.body.dataset.javaAvailabilityDate = eventDate;
+      syncLegacyAvailabilityState();
+      window.dispatchEvent(
+        new CustomEvent("java:toast", {
+          detail: { text: data.message || "Java Coffee Cart disponible para esta fecha.", tone: "success" },
+        })
+      );
+      setMessage("");
+      setStep(2);
+    } catch (error) {
+      const text = error?.message || "No fue posible verificar la disponibilidad.";
+      setMessage(text);
+      focusNode(targetForError(text) || document.querySelector(".java-calendar-card"));
+    } finally {
+      setCheckingAvailability(false);
+    }
   }
 
   function handleContinue() {
     const result = validate(step);
+    if (alertUser(result)) return;
 
-    if (
-      step === 1 &&
-      result?.[0] === "Verifica la disponibilidad de la fecha antes de continuar."
-    ) {
+    if (step === 1) {
       verifyAvailabilityAndContinue();
       return;
     }
 
-    if (alertUser(result)) return;
     setStep((value) => Math.min(5, value + 1));
   }
 
@@ -379,6 +387,16 @@ export default function QuoteFlowWizard() {
 
   useEffect(() => {
     if (pathname !== "/") return;
+
+    function onValidation(event) {
+      const text = event.detail?.message;
+      if (!text) return;
+      setMessage(text);
+      clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setMessage(""), 4200);
+      focusNode(targetForError(text));
+    }
+
     const interval = setInterval(() => {
       const error = document.querySelector("main.app-shell .status.error");
       const text = String(error?.textContent || "").trim();
@@ -387,7 +405,12 @@ export default function QuoteFlowWizard() {
       setMessage(text);
       focusNode(targetForError(text));
     }, 650);
-    return () => clearInterval(interval);
+
+    window.addEventListener("java:validation", onValidation);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("java:validation", onValidation);
+    };
   }, [pathname]);
 
   if (pathname !== "/") return null;
@@ -446,7 +469,9 @@ export default function QuoteFlowWizard() {
             <div className="java-quote-wizard-footer-copy">
               <strong>Paso {step} de {STEPS.length}</strong>
               <span>
-                {step === 5
+                {step === 1
+                  ? "Continuar confirma la disponibilidad de la fecha en tiempo real."
+                  : step === 5
                   ? "Revisa tus datos, acepta las condiciones y aparta la fecha con el anticipo."
                   : "Puedes volver a cualquier paso anterior antes de pagar."}
               </span>
@@ -459,7 +484,7 @@ export default function QuoteFlowWizard() {
                 disabled={checkingAvailability}
                 onClick={handleContinue}
               >
-                {checkingAvailability ? "Verificando…" : "Continuar →"}
+                {checkingAvailability ? "Confirmando fecha…" : "Continuar →"}
               </button>
             )}
           </div>,
