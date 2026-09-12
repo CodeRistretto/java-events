@@ -1,6 +1,7 @@
 import { Syne } from "next/font/google";
 import "./globals.css";
 import "./apple-light.css";
+import "./event-interactions.css";
 import EventDateTimeEnhancer from "./EventDateTimeEnhancer";
 
 const syne = Syne({
