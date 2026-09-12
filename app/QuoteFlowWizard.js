@@ -200,6 +200,7 @@ function targetForError(text) {
 
 export default function QuoteFlowWizard() {
   const pathname = usePathname();
+  const [hydrated, setHydrated] = useState(false);
   const [step, setStep] = useState(1);
   const [open, setOpen] = useState(false);
   const [headerMount, setHeaderMount] = useState(null);
@@ -208,6 +209,10 @@ export default function QuoteFlowWizard() {
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const timerRef = useRef(null);
   const lastErrorRef = useRef("");
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
 
   function alertUser(result) {
     if (!result) return false;
@@ -492,8 +497,7 @@ export default function QuoteFlowWizard() {
           footerMount
         )}
 
-      {!open &&
-        typeof document !== "undefined" &&
+      {hydrated && !open &&
         createPortal(
           <button type="button" className="java-quote-wizard-launch" onClick={() => setOpen(true)}>
             Cotizar mi evento →
