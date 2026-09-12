@@ -6,10 +6,12 @@ import "./location-pin.css";
 import "./event-duration.css";
 import "./event-photos.css";
 import "./lead-capture.css";
+import "./event-requirements.css";
 import LocationPinEnhancer from "./LocationPinEnhancer";
 import EventDurationGuard from "./EventDurationGuard";
 import EventPhotoExperience from "./EventPhotoExperience";
 import LeadCaptureEnhancer from "./LeadCaptureEnhancer";
+import EventFormHardening from "./EventFormHardening";
 
 const syne = Syne({
   subsets: ["latin"],
@@ -32,6 +34,7 @@ export default function RootLayout({ children }) {
         <EventDurationGuard />
         <EventPhotoExperience />
         <LeadCaptureEnhancer />
+        <EventFormHardening />
       </body>
     </html>
   );
