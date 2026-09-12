@@ -1,0 +1,735 @@
+/* ============================================================
+   JAVA EVENTS — APPLE-INSPIRED LIGHT DESIGN SYSTEM
+   Keeps Syne as the brand typeface, preserves Java orange,
+   removes the heavy dark UI, improves spacing and responsiveness,
+   and uses a lighter numeric face for monetary values.
+   ============================================================ */
+
+:root {
+  --apple-bg: #f5f5f7;
+  --apple-surface: #ffffff;
+  --apple-surface-soft: #fbfbfd;
+  --apple-surface-muted: #f1f1f3;
+  --apple-text: #1d1d1f;
+  --apple-muted: #6e6e73;
+  --apple-faint: #8e8e93;
+  --apple-line: rgba(29, 29, 31, 0.10);
+  --apple-line-strong: rgba(29, 29, 31, 0.16);
+  --apple-orange: #f05a22;
+  --apple-orange-soft: #fff2eb;
+  --apple-green: #248a3d;
+  --apple-red: #d70015;
+  --apple-amber: #b25000;
+  --apple-blue: #0071e3;
+  --apple-radius-xl: 28px;
+  --apple-radius-lg: 20px;
+  --apple-radius-md: 14px;
+  --apple-shadow: 0 12px 36px rgba(0, 0, 0, 0.055);
+  --apple-shadow-hover: 0 18px 46px rgba(0, 0, 0, 0.08);
+  --money-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+}
+
+html,
+body {
+  background: var(--apple-bg) !important;
+  color: var(--apple-text) !important;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(240, 90, 34, 0.18);
+}
+
+/* ---------- Shared numeric treatment ---------- */
+.quote-money,
+.mini-stat-value,
+.summary-big,
+.countdown,
+.confirmation-page .item-price,
+.confirmation-page .money-value,
+.confirmation-page .paid-today-value,
+.confirmation-page .balance-value,
+.my-events-page .money-row span:last-child,
+.pay-page .summary-grid strong,
+.pay-page td.amount {
+  font-family: var(--money-font) !important;
+  font-weight: 500 !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.025em !important;
+}
+
+/* ============================================================
+   CUSTOMER QUOTER / HOME
+   ============================================================ */
+
+.app-shell {
+  min-height: 100vh;
+  background: var(--apple-bg) !important;
+  color: var(--apple-text) !important;
+}
+
+.app-shell .container {
+  width: min(1240px, calc(100% - 40px));
+}
+
+.app-shell .hero {
+  min-height: 500px !important;
+  border-bottom: 1px solid var(--apple-line) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f7f7f9 100%) !important;
+}
+
+.app-shell .hero-bg {
+  background:
+    radial-gradient(circle at 82% 18%, rgba(240, 90, 34, 0.12), transparent 28%),
+    radial-gradient(circle at 12% 88%, rgba(240, 90, 34, 0.055), transparent 25%),
+    linear-gradient(180deg, #ffffff 0%, #f7f7f9 100%) !important;
+  opacity: 1 !important;
+}
+
+.app-shell .hero-inner {
+  padding-top: 88px !important;
+  padding-bottom: 64px !important;
+}
+
+.app-shell .hero-grid {
+  gap: clamp(28px, 5vw, 72px) !important;
+}
+
+.app-shell .eyebrow {
+  color: var(--apple-orange) !important;
+  background: #ffffff !important;
+  border-color: rgba(240, 90, 34, 0.18) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.035) !important;
+}
+
+.app-shell .hero-title {
+  color: var(--apple-text) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.055em !important;
+}
+
+.app-shell .hero-title span {
+  color: var(--apple-orange) !important;
+}
+
+.app-shell .hero-subtitle,
+.app-shell .hero-card p,
+.app-shell .panel-subtitle,
+.app-shell .stepbar-desc,
+.app-shell .check-text,
+.app-shell .quote-meta,
+.app-shell .quote-money-label,
+.app-shell .mini-stat-label,
+.app-shell .note,
+.app-shell .caption,
+.app-shell .summary-text,
+.app-shell .summary-row,
+.app-shell .tiny {
+  color: var(--apple-muted) !important;
+}
+
+.app-shell .hero-pill {
+  background: rgba(255,255,255,.86) !important;
+  border-color: var(--apple-line) !important;
+  color: #434346 !important;
+}
+
+.app-shell .hero-card,
+.app-shell .panel,
+.app-shell .summary-card {
+  background: rgba(255,255,255,.94) !important;
+  border-color: var(--apple-line) !important;
+  box-shadow: var(--apple-shadow) !important;
+  backdrop-filter: blur(18px);
+}
+
+.app-shell .hero-card {
+  border-radius: 24px !important;
+}
+
+.app-shell .hero-card-label,
+.app-shell .micro-kicker {
+  color: var(--apple-faint) !important;
+}
+
+.app-shell .hero-card-title,
+.app-shell .micro-value,
+.app-shell .panel-title,
+.app-shell .section-title h2,
+.app-shell .section-title h3,
+.app-shell .stepbar-label,
+.app-shell .check-title,
+.app-shell .quote-place,
+.app-shell .summary-title,
+.app-shell .summary-row strong {
+  color: var(--apple-text) !important;
+}
+
+.app-shell .micro-box,
+.app-shell .stepbar-item,
+.app-shell .check-card,
+.app-shell .mini-stat,
+.app-shell .chip {
+  background: var(--apple-surface-soft) !important;
+  border-color: var(--apple-line) !important;
+}
+
+.app-shell .page-grid {
+  gap: 26px !important;
+  padding-top: 36px !important;
+}
+
+.app-shell .panel {
+  border-radius: 28px !important;
+}
+
+.app-shell .panel-header {
+  padding: 34px 34px 0 !important;
+}
+
+.app-shell .stepbar {
+  padding: 28px 34px 0 !important;
+  gap: 12px !important;
+}
+
+.app-shell .stepbar-item {
+  min-height: 118px !important;
+  padding: 16px !important;
+}
+
+.app-shell .stepbar-item.active {
+  background: var(--apple-orange-soft) !important;
+  border-color: rgba(240,90,34,.28) !important;
+}
+
+.app-shell .stepbar-item.done {
+  background: #f0faf2 !important;
+  border-color: rgba(36,138,61,.20) !important;
+}
+
+.app-shell .stepbar-number {
+  background: #ececee !important;
+  color: #4c4c50 !important;
+}
+
+.app-shell .stepbar-item.active .stepbar-number {
+  color: #fff !important;
+  background: var(--apple-orange) !important;
+}
+
+.app-shell .form-section {
+  padding: 34px !important;
+}
+
+.app-shell .section-kicker {
+  color: var(--apple-orange) !important;
+}
+
+.app-shell .divider,
+.app-shell .summary-block {
+  border-color: var(--apple-line) !important;
+  background: var(--apple-line) !important;
+}
+
+.app-shell .label {
+  color: #3a3a3c !important;
+  font-weight: 600 !important;
+}
+
+.app-shell .input,
+.app-shell .select,
+.app-shell .textarea {
+  color: var(--apple-text) !important;
+  background: #ffffff !important;
+  border-color: var(--apple-line-strong) !important;
+  box-shadow: 0 1px 0 rgba(0,0,0,.015) !important;
+}
+
+.app-shell .input::placeholder,
+.app-shell .textarea::placeholder {
+  color: #a1a1a6 !important;
+}
+
+.app-shell .input:focus,
+.app-shell .select:focus,
+.app-shell .textarea:focus {
+  border-color: rgba(240,90,34,.55) !important;
+  box-shadow: 0 0 0 4px rgba(240,90,34,.09) !important;
+}
+
+.app-shell .check-card:hover {
+  border-color: rgba(240,90,34,.24) !important;
+  background: #fffaf7 !important;
+}
+
+.app-shell .button {
+  border-radius: 999px !important;
+  font-weight: 650 !important;
+  min-height: 52px !important;
+  box-shadow: none !important;
+}
+
+.app-shell .button-primary {
+  background: var(--apple-orange) !important;
+  color: #ffffff !important;
+}
+
+.app-shell .button-primary:hover:not(:disabled) {
+  background: #dd4e18 !important;
+  transform: translateY(-1px) !important;
+}
+
+.app-shell .button-secondary {
+  background: #ffffff !important;
+  color: var(--apple-text) !important;
+  border: 1px solid var(--apple-line-strong) !important;
+}
+
+.app-shell .status.success {
+  color: #176b2b !important;
+  background: #eff9f1 !important;
+  border-color: rgba(36,138,61,.20) !important;
+}
+
+.app-shell .status.error {
+  color: #9f1522 !important;
+  background: #fff1f2 !important;
+  border-color: rgba(215,0,21,.16) !important;
+}
+
+.app-shell .quote-card,
+.app-shell .hold-card {
+  background: #ffffff !important;
+  border-color: var(--apple-line) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,.035) !important;
+}
+
+.app-shell .hold-card {
+  background: #f4fbf5 !important;
+  border-color: rgba(36,138,61,.18) !important;
+}
+
+.app-shell .quote-money,
+.app-shell .summary-big,
+.app-shell .mini-stat-value,
+.app-shell .countdown {
+  color: var(--apple-text) !important;
+}
+
+.app-shell .brand-quote {
+  color: #783013 !important;
+  background: #fff6f1 !important;
+  border-color: rgba(240,90,34,.16) !important;
+}
+
+/* ============================================================
+   CONFIRMATION
+   ============================================================ */
+
+.confirmation-page {
+  background: var(--apple-bg) !important;
+  color: var(--apple-text) !important;
+  padding: 34px 20px 80px !important;
+}
+
+.confirmation-page .confirmation-shell {
+  max-width: 1240px !important;
+}
+
+.confirmation-page .topbar-subtitle,
+.confirmation-page .hero-copy,
+.confirmation-page .status-card p,
+.confirmation-page .base-service-card p,
+.confirmation-page .item-detail,
+.confirmation-page .info-label,
+.confirmation-page .step-text,
+.confirmation-page .paid-today-description,
+.confirmation-page .footer {
+  color: var(--apple-muted) !important;
+}
+
+.confirmation-page .eyebrow {
+  color: var(--apple-orange) !important;
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  margin-bottom: 8px !important;
+}
+
+.confirmation-page .hero-card,
+.confirmation-page .main-card,
+.confirmation-page .payment-card,
+.confirmation-page .loading-card,
+.confirmation-page .error-card {
+  background: #ffffff !important;
+  color: var(--apple-text) !important;
+  border-color: var(--apple-line) !important;
+  box-shadow: var(--apple-shadow) !important;
+}
+
+.confirmation-page .status-card {
+  color: var(--apple-text) !important;
+  box-shadow: 0 8px 26px rgba(0,0,0,.035) !important;
+}
+
+.confirmation-page .hero-card h1 {
+  color: var(--apple-text) !important;
+  font-weight: 700 !important;
+}
+
+.confirmation-page .event-number-box,
+.confirmation-page .base-service-card,
+.confirmation-page .info-card,
+.confirmation-page .next-step,
+.confirmation-page .paid-today-card {
+  background: var(--apple-surface-soft) !important;
+  border-color: var(--apple-line) !important;
+}
+
+.confirmation-page .event-number-label,
+.confirmation-page .status-kicker,
+.confirmation-page .balance-label {
+  color: var(--apple-faint) !important;
+}
+
+.confirmation-page .event-number,
+.confirmation-page .status-title,
+.confirmation-page .base-service-title,
+.confirmation-page .item-name,
+.confirmation-page .info-value,
+.confirmation-page .step-title,
+.confirmation-page .money-value,
+.confirmation-page .paid-today-value,
+.confirmation-page .balance-value {
+  color: var(--apple-text) !important;
+}
+
+.confirmation-page .item-row,
+.confirmation-page .money-row,
+.confirmation-page .section-divider {
+  border-color: var(--apple-line) !important;
+}
+
+.confirmation-page .important-card {
+  color: #71310f !important;
+  background: #fff7f2 !important;
+  border-color: rgba(240,90,34,.18) !important;
+}
+
+.confirmation-page .confirmed-card {
+  color: #176b2b !important;
+  background: #eff9f1 !important;
+  border-color: rgba(36,138,61,.18) !important;
+}
+
+.confirmation-page .pending-card {
+  color: #7a4400 !important;
+  background: #fff8e8 !important;
+  border-color: rgba(178,80,0,.18) !important;
+}
+
+.confirmation-page .primary-button {
+  background: var(--apple-orange) !important;
+  color: #fff !important;
+  border-radius: 999px !important;
+  font-weight: 650 !important;
+}
+
+.confirmation-page .secondary-button {
+  background: #fff !important;
+  color: var(--apple-text) !important;
+  border-color: var(--apple-line-strong) !important;
+  border-radius: 999px !important;
+  font-weight: 650 !important;
+}
+
+/* ============================================================
+   MY EVENTS
+   ============================================================ */
+
+.my-events-page {
+  background: var(--apple-bg) !important;
+  color: var(--apple-text) !important;
+  padding: 32px 20px 80px !important;
+}
+
+.my-events-page .my-events-shell {
+  max-width: 1180px !important;
+}
+
+.my-events-page .eyebrow {
+  color: var(--apple-orange) !important;
+}
+
+.my-events-page .topbar-copy,
+.my-events-page .hero p,
+.my-events-page .lookup-heading p,
+.my-events-page .event-location,
+.my-events-page .field small,
+.my-events-page footer,
+.my-events-page .empty-card p {
+  color: var(--apple-muted) !important;
+}
+
+.my-events-page .hero > div:first-child,
+.my-events-page .explanation-card,
+.my-events-page .lookup-card,
+.my-events-page .event-card,
+.my-events-page .empty-card {
+  background: #fff !important;
+  color: var(--apple-text) !important;
+  border-color: var(--apple-line) !important;
+  box-shadow: var(--apple-shadow) !important;
+}
+
+.my-events-page .hero h1,
+.my-events-page .lookup-heading h2,
+.my-events-page .results-header h2,
+.my-events-page .event-number,
+.my-events-page .event-title,
+.my-events-page .event-info-value {
+  color: var(--apple-text) !important;
+}
+
+.my-events-page .privacy-note {
+  color: #71310f !important;
+  background: #fff7f2 !important;
+  border-color: rgba(240,90,34,.16) !important;
+}
+
+.my-events-page .field input {
+  background: #fff !important;
+  color: var(--apple-text) !important;
+  border-color: var(--apple-line-strong) !important;
+}
+
+.my-events-page .field input:focus {
+  border-color: rgba(240,90,34,.55) !important;
+  box-shadow: 0 0 0 4px rgba(240,90,34,.08) !important;
+}
+
+.my-events-page .event-info,
+.my-events-page .financial-box {
+  background: var(--apple-surface-soft) !important;
+  border-color: var(--apple-line) !important;
+}
+
+.my-events-page .event-info-label,
+.my-events-page .event-number-label,
+.my-events-page .money-row {
+  color: var(--apple-faint) !important;
+}
+
+.my-events-page .money-row {
+  border-color: var(--apple-line) !important;
+}
+
+.my-events-page .money-row span:last-child {
+  color: var(--apple-text) !important;
+}
+
+.my-events-page .primary-button {
+  background: var(--apple-orange) !important;
+  color: #fff !important;
+  border-radius: 999px !important;
+  font-weight: 650 !important;
+}
+
+.my-events-page .secondary-button {
+  background: #fff !important;
+  color: var(--apple-text) !important;
+  border-color: var(--apple-line-strong) !important;
+  border-radius: 999px !important;
+  font-weight: 650 !important;
+}
+
+/* ============================================================
+   ADMIN PAYMENTS
+   ============================================================ */
+
+.pay-page {
+  background: var(--apple-bg) !important;
+  color: var(--apple-text) !important;
+  padding: 34px 20px 80px !important;
+}
+
+.pay-page .pay-shell {
+  max-width: 1400px !important;
+}
+
+.pay-page .pay-header p,
+.pay-page .muted,
+.pay-page .card p,
+.pay-page .event-head p,
+.pay-page .event-row span,
+.pay-page .event-row small,
+.pay-page .empty {
+  color: var(--apple-muted) !important;
+}
+
+.pay-page .eyebrow {
+  color: var(--apple-orange) !important;
+}
+
+.pay-page .nav a,
+.pay-page .secondary {
+  background: #fff !important;
+  color: var(--apple-text) !important;
+  border-color: var(--apple-line-strong) !important;
+  border-radius: 999px !important;
+  font-weight: 650 !important;
+}
+
+.pay-page .events-panel,
+.pay-page .detail-panel,
+.pay-page .card {
+  background: #fff !important;
+  color: var(--apple-text) !important;
+  border-color: var(--apple-line) !important;
+  box-shadow: var(--apple-shadow) !important;
+}
+
+.pay-page .events-panel input,
+.pay-page .manual-form input,
+.pay-page .manual-form select {
+  background: #fff !important;
+  color: var(--apple-text) !important;
+  border-color: var(--apple-line-strong) !important;
+}
+
+.pay-page .event-row {
+  background: var(--apple-surface-soft) !important;
+  color: var(--apple-text) !important;
+  border-color: var(--apple-line) !important;
+}
+
+.pay-page .event-row.active {
+  background: var(--apple-orange-soft) !important;
+  border-color: rgba(240,90,34,.34) !important;
+}
+
+.pay-page .event-head,
+.pay-page th,
+.pay-page td {
+  border-color: var(--apple-line) !important;
+}
+
+.pay-page .summary-grid > div {
+  background: var(--apple-surface-soft) !important;
+  color: var(--apple-text) !important;
+  border-color: var(--apple-line) !important;
+}
+
+.pay-page .summary-grid span,
+.pay-page th {
+  color: var(--apple-faint) !important;
+}
+
+.pay-page .summary-grid strong,
+.pay-page td {
+  color: var(--apple-text) !important;
+}
+
+.pay-page .card button,
+.pay-page .manual-form button {
+  background: var(--apple-orange) !important;
+  color: #fff !important;
+  border-radius: 999px !important;
+  font-weight: 650 !important;
+}
+
+.pay-page .danger {
+  color: #a7111e !important;
+  background: #fff1f2 !important;
+  border-color: rgba(215,0,21,.16) !important;
+}
+
+.pay-page .alert.error {
+  color: #9f1522 !important;
+  background: #fff1f2 !important;
+  border-color: rgba(215,0,21,.16) !important;
+}
+
+.pay-page .alert.success {
+  color: #176b2b !important;
+  background: #eff9f1 !important;
+  border-color: rgba(36,138,61,.18) !important;
+}
+
+/* ---------- Responsive refinements ---------- */
+@media (max-width: 1050px) {
+  .app-shell .page-grid,
+  .confirmation-page .main-grid,
+  .pay-page .layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  .confirmation-page .payment-card {
+    position: static !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .app-shell .container {
+    width: min(100% - 24px, 1240px) !important;
+  }
+
+  .app-shell .hero-inner {
+    padding: 56px 0 42px !important;
+  }
+
+  .app-shell .hero-title {
+    font-size: clamp(42px, 12vw, 58px) !important;
+  }
+
+  .app-shell .panel-header,
+  .app-shell .form-section {
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+  }
+
+  .app-shell .stepbar {
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+  }
+
+  .confirmation-page,
+  .my-events-page,
+  .pay-page {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .confirmation-page .hero-card,
+  .confirmation-page .status-card,
+  .confirmation-page .main-card,
+  .confirmation-page .payment-card,
+  .my-events-page .hero > div:first-child,
+  .my-events-page .explanation-card,
+  .my-events-page .lookup-card,
+  .my-events-page .event-card,
+  .pay-page .events-panel,
+  .pay-page .detail-panel,
+  .pay-page .card {
+    border-radius: 18px !important;
+  }
+
+  .confirmation-page .topbar,
+  .confirmation-page .topbar-actions,
+  .my-events-page .topbar,
+  .my-events-page .results-header,
+  .pay-page .pay-header,
+  .pay-page .event-head {
+    align-items: stretch !important;
+  }
+}
+
+@media print {
+  .confirmation-page {
+    background: #fff !important;
+  }
+}
