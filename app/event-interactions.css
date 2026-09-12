@@ -1,0 +1,355 @@
+/* ============================================================
+   JAVA EVENTS — INTERACTIONS
+   Clear click targets + visual calendar / schedule selector.
+   ============================================================ */
+
+/* Calendar event links should look and behave like real navigation. */
+a[href^="/admin/events/"] {
+  text-decoration: none;
+}
+
+/* Last line inside calendar event cards acts as the open affordance. */
+a[href^="/admin/events/"] > span:last-child {
+  color: #c94a18;
+  font-size: 10px;
+  font-weight: 650;
+  margin-top: 3px;
+}
+
+button,
+a,
+select,
+input[type="checkbox"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(240, 90, 34, 0.22);
+  outline-offset: 2px;
+}
+
+/* ---------- Quote date + time experience ---------- */
+.java-datetime-mount {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.java-datetime-picker {
+  width: 100%;
+  margin: 4px 0 20px;
+  padding: clamp(18px, 2.4vw, 26px);
+  border: 1px solid rgba(29, 29, 31, 0.09);
+  border-radius: 24px;
+  background: #fbfbfd;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.035);
+  color: #1d1d1f;
+}
+
+.java-datetime-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.java-datetime-kicker {
+  color: #f05a22;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.java-datetime-head h4 {
+  margin: 6px 0 7px;
+  font-size: clamp(22px, 2.3vw, 30px);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  font-weight: 650;
+}
+
+.java-datetime-head p {
+  max-width: 650px;
+  margin: 0;
+  color: #6e6e73;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.java-datetime-summary {
+  min-width: 230px;
+  padding: 14px 16px;
+  border: 1px solid rgba(29, 29, 31, 0.09);
+  border-radius: 16px;
+  background: #fff;
+  text-align: right;
+}
+
+.java-datetime-summary span,
+.java-datetime-summary small {
+  display: block;
+  color: #8e8e93;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.java-datetime-summary strong {
+  display: block;
+  margin: 5px 0 3px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: #1d1d1f;
+}
+
+.java-datetime-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+  gap: 16px;
+}
+
+.java-calendar-card,
+.java-time-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(29, 29, 31, 0.09);
+  border-radius: 18px;
+  background: #fff;
+}
+
+.java-calendar-toolbar {
+  display: grid;
+  grid-template-columns: 38px 1fr 38px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 13px;
+}
+
+.java-calendar-toolbar strong {
+  text-align: center;
+  text-transform: capitalize;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.java-calendar-toolbar button {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(29, 29, 31, 0.10);
+  border-radius: 50%;
+  background: #f7f7f9;
+  color: #1d1d1f;
+  font-size: 17px;
+  transition: 0.16s ease;
+}
+
+.java-calendar-toolbar button:hover {
+  background: #efeff1;
+}
+
+.java-calendar-weekdays,
+.java-calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.java-calendar-weekdays {
+  margin-bottom: 5px;
+}
+
+.java-calendar-weekdays span {
+  padding: 5px 0;
+  color: #8e8e93;
+  text-align: center;
+  font-size: 9px;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+
+.java-calendar-days button {
+  aspect-ratio: 1;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: #1d1d1f;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  transition: 0.15s ease;
+}
+
+.java-calendar-days button:hover:not(:disabled):not(.selected) {
+  background: #f2f2f4;
+}
+
+.java-calendar-days button.outside {
+  color: #b8b8bd;
+}
+
+.java-calendar-days button.today:not(.selected) {
+  border-color: rgba(240, 90, 34, 0.34);
+  color: #c94a18;
+}
+
+.java-calendar-days button.selected {
+  background: #f05a22;
+  color: #fff;
+  box-shadow: 0 5px 14px rgba(240, 90, 34, 0.20);
+}
+
+.java-calendar-days button:disabled {
+  color: #d3d3d7;
+  cursor: not-allowed;
+}
+
+.java-time-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.java-time-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.java-time-tabs > button {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid rgba(29, 29, 31, 0.10);
+  border-radius: 14px;
+  background: #f7f7f9;
+  color: #1d1d1f;
+  text-align: left;
+  transition: 0.16s ease;
+}
+
+.java-time-tabs > button span {
+  color: #8e8e93;
+  font-size: 10px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.java-time-tabs > button strong {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  font-size: 19px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.java-time-tabs > button.active {
+  background: #fff2eb;
+  border-color: rgba(240, 90, 34, 0.28);
+}
+
+.java-time-tabs > button.active strong {
+  color: #c94a18;
+}
+
+.java-time-help {
+  margin: 13px 2px 10px;
+  color: #6e6e73;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.java-time-slots {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 3px;
+  scrollbar-width: thin;
+}
+
+.java-time-slots button {
+  min-height: 42px;
+  padding: 8px 7px;
+  border: 1px solid rgba(29, 29, 31, 0.10);
+  border-radius: 11px;
+  background: #fff;
+  color: #323235;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  transition: 0.15s ease;
+}
+
+.java-time-slots button:hover:not(:disabled):not(.selected) {
+  border-color: rgba(240, 90, 34, 0.22);
+  background: #fff9f6;
+}
+
+.java-time-slots button.selected {
+  border-color: #f05a22;
+  background: #f05a22;
+  color: #fff;
+}
+
+.java-time-slots button:disabled {
+  background: #fafafa;
+  color: #c8c8cd;
+  cursor: not-allowed;
+}
+
+@media (max-width: 900px) {
+  .java-datetime-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .java-datetime-head {
+    flex-direction: column;
+  }
+
+  .java-datetime-summary {
+    width: 100%;
+    text-align: left;
+  }
+}
+
+@media (max-width: 600px) {
+  .java-datetime-picker {
+    margin-left: -2px;
+    margin-right: -2px;
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .java-calendar-card,
+  .java-time-card {
+    padding: 12px;
+    border-radius: 15px;
+  }
+
+  .java-calendar-weekdays,
+  .java-calendar-days {
+    gap: 2px;
+  }
+
+  .java-calendar-days button {
+    font-size: 12px;
+  }
+
+  .java-time-slots {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: 270px;
+  }
+}
