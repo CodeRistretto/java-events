@@ -4,8 +4,10 @@ import "./apple-light.css";
 import "./event-interactions.css";
 import "./location-pin.css";
 import "./event-duration.css";
+import "./event-photos.css";
 import LocationPinEnhancer from "./LocationPinEnhancer";
 import EventDurationGuard from "./EventDurationGuard";
+import EventPhotoExperience from "./EventPhotoExperience";
 
 const syne = Syne({
   subsets: ["latin"],
@@ -26,6 +28,7 @@ export default function RootLayout({ children }) {
         {children}
         <LocationPinEnhancer />
         <EventDurationGuard />
+        <EventPhotoExperience />
       </body>
     </html>
   );
