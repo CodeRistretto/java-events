@@ -142,6 +142,9 @@ function itemHumanLabel(item) {
   if (item.code === "ADDITIONAL_HOUR") {
     return `${item.quantity} hora(s) adicional(es) de servicio`;
   }
+  if (item.code === "SERVICE_AREA_TRANSPORT") {
+    return "Traslado del Coffee Cart a tu ciudad";
+  }
   return item.name;
 }
 
@@ -155,6 +158,9 @@ function itemCalculation(item) {
   }
   if (item.pricingType === "PER_UNIT") {
     return `${item.quantity} unidad(es) × ${money(item.unitPrice)}`;
+  }
+  if (item.code === "SERVICE_AREA_TRANSPORT") {
+    return "Cargo fijo por traslado, ida y vuelta";
   }
   if (item.pricingType === "PER_EVENT") return "Precio fijo por evento";
   return "";
@@ -203,8 +209,8 @@ export default function Home() {
     serviceAreaId: "",
     eventType: "",
     eventDate: "",
-    startTime: "16:00",
-    endTime: "18:00",
+    startTime: "",
+    endTime: "",
     guestCount: 100,
     customerName: "",
     email: "",
@@ -290,6 +296,7 @@ export default function Home() {
   const depositPercent = Number(config?.settings?.deposit_bps || 0) / 100;
   const vatPercent = Number(config?.settings?.vat_bps || 0) / 100;
   const holdMinutes = Number(config?.settings?.hold_minutes || 15);
+  const standardDurationHours = Number(config?.settings?.standard_duration_hours || 2);
 
   async function loadConfig() {
     try {
@@ -324,7 +331,16 @@ export default function Home() {
   function update(key, value) {
     setForm((current) => ({ ...current, [key]: value }));
 
-    if (["serviceAreaId", "eventDate", "guestCount", "selectedAddOns"].includes(key)) {
+    if (
+      [
+        "serviceAreaId",
+        "eventDate",
+        "startTime",
+        "endTime",
+        "guestCount",
+        "selectedAddOns",
+      ].includes(key)
+    ) {
       setQuote(null);
     }
 
@@ -332,6 +348,18 @@ export default function Home() {
       setAvailability(null);
     }
 
+    setSuccess("");
+  }
+
+  function selectEventDate(value) {
+    setForm((current) => ({
+      ...current,
+      eventDate: value,
+      startTime: "",
+      endTime: "",
+    }));
+    setAvailability(null);
+    setQuote(null);
     setSuccess("");
   }
 
@@ -371,6 +399,14 @@ export default function Home() {
 
       if (!form.serviceAreaId) throw new Error("Selecciona una ciudad.");
       if (!form.eventDate) throw new Error("Selecciona una fecha en el calendario.");
+      if (!form.startTime || !form.endTime) {
+        throw new Error("Selecciona la hora de inicio y de término.");
+      }
+      if (durationHours(form.startTime, form.endTime) < standardDurationHours) {
+        throw new Error(
+          `El servicio requiere un horario mínimo de ${standardDurationHours} horas.`
+        );
+      }
 
       const response = await fetch("/api/availability", {
         method: "POST",
@@ -393,7 +429,7 @@ export default function Home() {
         throw new Error(data.message || "La fecha no está disponible.");
       }
 
-      setSuccess("La fecha está disponible. Ahora puedes calcular el precio de tu evento.");
+      setSuccess("La fecha está disponible. Continúa con los datos del lugar.");
     } catch (e) {
       setError(e.message);
     } finally {
@@ -658,37 +694,6 @@ export default function Home() {
     }
   }
 
-  async function uploadFile(file, uploadType) {
-    if (!file || !hold?.bookingId) return;
-
-    setBusy(`upload-${uploadType}`);
-    setError("");
-
-    try {
-      const body = new FormData();
-      body.append("bookingId", hold.bookingId);
-      body.append("uploadType", uploadType);
-      body.append("file", file);
-
-      const response = await fetch("/api/event-upload", {
-        method: "POST",
-        body,
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || "No fue posible subir el archivo.");
-      }
-
-      setSuccess("Archivo guardado correctamente.");
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusy("");
-    }
-  }
-
   if (!config) {
     return (
       <main className="app-shell">
@@ -808,13 +813,39 @@ export default function Home() {
                   {config.serviceAreas.map((area) => (
                     <option key={area.id} value={area.id}>
                       {area.city}, {area.state}
+                      {Number(area.transport_fee_cents || 0) > 0
+                        ? ` · traslado ${money(Number(area.transport_fee_cents) / 100)} + IVA`
+                        : " · traslado incluido"}
                     </option>
                   ))}
                   <option value="OTHER">Otra ciudad</option>
                 </select>
                 <small className="caption">
-                  Sólo puedes pagar eventos dentro de una ciudad con cobertura activa.
+                  Elige una zona con cobertura activa. El costo de traslado siempre se
+                  muestra antes de cotizar.
                 </small>
+                {selectedArea && (
+                  <div
+                    className={`java-transport-disclosure ${
+                      Number(selectedArea.transport_fee_cents || 0) > 0 ? "paid" : "included"
+                    }`}
+                  >
+                    <span aria-hidden="true">↗</span>
+                    <div>
+                      <strong>
+                        {Number(selectedArea.transport_fee_cents || 0) > 0
+                          ? `Traslado a ${selectedArea.city}: ${money(
+                              Number(selectedArea.transport_fee_cents) / 100
+                            )} + IVA`
+                          : `Traslado a ${selectedArea.city} incluido`}
+                      </strong>
+                      <small>
+                        Incluye ida y vuelta del Coffee Cart. No aparecerán cargos de
+                        traslado sorpresa al final.
+                      </small>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -831,7 +862,8 @@ export default function Home() {
                   eventDate={form.eventDate}
                   startTime={form.startTime}
                   endTime={form.endTime}
-                  onDate={(value) => update("eventDate", value)}
+                  standardDurationHours={standardDurationHours}
+                  onDate={selectEventDate}
                   onStart={(value) => update("startTime", value)}
                   onEnd={(value) => update("endTime", value)}
                 />
@@ -1165,7 +1197,9 @@ export default function Home() {
                     disabled={busy === "hold"}
                     onClick={createHold}
                   >
-                    {busy === "hold" ? "Apartando fecha..." : "Apartar fecha con anticipo"}
+                    {busy === "hold"
+                      ? "Apartando fecha..."
+                      : `Apartar por ${holdMinutes} min y continuar al pago`}
                   </button>
                 </div>
 
@@ -1186,27 +1220,17 @@ export default function Home() {
                       </p>
                     </div>
 
-                    <h4 style={{ marginTop: 25 }}>Documentos del lugar</h4>
-                    <p className="caption">Si los tienes a la mano, puedes subirlos ahora.</p>
+                    <div className="java-hold-next-step">
+                      <span>SIGUIENTE PASO</span>
+                      <strong>Confirma tu fecha pagando sólo el anticipo</strong>
+                      <p>
+                        El pago se procesa de forma segura en Shopify. Si después
+                        necesitamos fotos o un plano del lugar, te los pediremos por
+                        separado; no tienes que subir nada ahora.
+                      </p>
+                    </div>
 
-                    <UploadField
-                      label="Foto del lugar"
-                      onFile={(file) => uploadFile(file, "VENUE_PHOTO")}
-                    />
-                    <UploadField
-                      label="Foto del acceso"
-                      onFile={(file) => uploadFile(file, "ACCESS_PHOTO")}
-                    />
-                    <UploadField
-                      label="Layout o plano"
-                      onFile={(file) => uploadFile(file, "FLOOR_PLAN")}
-                    />
-                    <UploadField
-                      label="Archivo adicional"
-                      onFile={(file) => uploadFile(file, "ADDITIONAL_FILE")}
-                    />
-
-                    <div className="action-row">
+                    <div className="action-row java-payment-action">
                       <button
                         className="button button-primary"
                         disabled={busy === "checkout" || remaining === 0}
@@ -1291,7 +1315,15 @@ export default function Home() {
   );
 }
 
-function EventSchedulePicker({ eventDate, startTime, endTime, onDate, onStart, onEnd }) {
+function EventSchedulePicker({
+  eventDate,
+  startTime,
+  endTime,
+  standardDurationHours,
+  onDate,
+  onStart,
+  onEnd,
+}) {
   const selectedDate = parseDate(eventDate);
   const [month, setMonth] = useState(
     selectedDate
@@ -1302,13 +1334,17 @@ function EventSchedulePicker({ eventDate, startTime, endTime, onDate, onStart, o
   const days = useMemo(() => buildCalendar(month), [month]);
   const today = isoDate(new Date());
   const duration = durationHours(startTime, endTime);
+  const minimumDurationMinutes = Math.max(1, Number(standardDurationHours || 2)) * 60;
+  const latestSlotMinutes = minutesFromTime(TIME_SLOTS[TIME_SLOTS.length - 1]);
 
   function chooseStart(value) {
     onStart(value);
-    if (minutesFromTime(endTime) <= minutesFromTime(value)) {
-      onEnd(timeFromMinutes(minutesFromTime(value) + 120));
-    }
+    onEnd("");
     setActiveTime("end");
+  }
+
+  function chooseEnd(value) {
+    onEnd(value);
   }
 
   return (
@@ -1322,12 +1358,20 @@ function EventSchedulePicker({ eventDate, startTime, endTime, onDate, onStart, o
             y término. La disponibilidad se valida antes de cotizar.
           </p>
         </div>
-        <div className="java-datetime-summary">
+        <div className="java-datetime-summary" aria-live="polite">
           <span>{dateLabel(eventDate)}</span>
           <strong>
-            {timeLabel(startTime)} – {timeLabel(endTime)}
+            {startTime && endTime
+              ? `${timeLabel(startTime)} – ${timeLabel(endTime)}`
+              : startTime
+              ? `${timeLabel(startTime)} · elige término`
+              : "Elige inicio y término"}
           </strong>
-          <small>{duration > 0 ? `${duration} horas de servicio` : "Horario inválido"}</small>
+          <small>
+            {duration >= standardDurationHours
+              ? `${duration} horas de servicio`
+              : `${standardDurationHours} horas mínimas incluidas`}
+          </small>
         </div>
       </div>
 
@@ -1383,6 +1427,8 @@ function EventSchedulePicker({ eventDate, startTime, endTime, onDate, onStart, o
                   type="button"
                   key={value}
                   disabled={disabled}
+                  aria-label={dateLabel(value)}
+                  aria-pressed={selected}
                   className={`${outside ? "outside" : ""} ${
                     selected ? "selected" : ""
                   } ${isToday ? "today" : ""}`}
@@ -1396,36 +1442,54 @@ function EventSchedulePicker({ eventDate, startTime, endTime, onDate, onStart, o
         </div>
 
         <div className="java-time-card">
-          <div className="java-time-tabs">
+          <div className="java-time-tabs" role="group" aria-label="Parte del horario a elegir">
             <button
               type="button"
               className={activeTime === "start" ? "active" : ""}
+              aria-pressed={activeTime === "start"}
               onClick={() => setActiveTime("start")}
             >
               <span>Inicio</span>
-              <strong>{timeLabel(startTime)}</strong>
+              <strong>{startTime ? timeLabel(startTime) : "Selecciona"}</strong>
             </button>
             <button
               type="button"
               className={activeTime === "end" ? "active" : ""}
+              disabled={!startTime}
+              aria-pressed={activeTime === "end"}
               onClick={() => setActiveTime("end")}
             >
               <span>Término</span>
-              <strong>{timeLabel(endTime)}</strong>
+              <strong>{endTime ? timeLabel(endTime) : "Selecciona"}</strong>
             </button>
           </div>
 
           <div className="java-time-help">
             {activeTime === "start"
-              ? "Selecciona a qué hora inicia el servicio. Después pasaremos automáticamente al término."
-              : "Selecciona la hora de término. Las horas anteriores al inicio están deshabilitadas."}
+              ? `Elige el inicio. Dejamos disponibles únicamente horarios que permiten al menos ${standardDurationHours} horas de servicio.`
+              : `Elige el término. El primer horario disponible completa las ${standardDurationHours} horas incluidas; el tiempo adicional se cotiza automáticamente.`}
           </div>
 
           <div className="java-time-slots">
             {TIME_SLOTS.map((slot) => {
               const selected = activeTime === "start" ? slot === startTime : slot === endTime;
+              const slotMinutes = minutesFromTime(slot);
               const disabled =
-                activeTime === "end" && minutesFromTime(slot) <= minutesFromTime(startTime);
+                activeTime === "start"
+                  ? slotMinutes + minimumDurationMinutes > latestSlotMinutes
+                  : !startTime ||
+                    slotMinutes < minutesFromTime(startTime) + minimumDurationMinutes;
+              const extraHours =
+                activeTime === "end" && startTime
+                  ? Math.max(
+                      0,
+                      Math.ceil(
+                        (slotMinutes - minutesFromTime(startTime)) / 60 -
+                          standardDurationHours -
+                          0.000001
+                      )
+                    )
+                  : 0;
 
               return (
                 <button
@@ -1433,11 +1497,16 @@ function EventSchedulePicker({ eventDate, startTime, endTime, onDate, onStart, o
                   key={`${activeTime}-${slot}`}
                   className={selected ? "selected" : ""}
                   disabled={disabled}
+                  aria-pressed={selected}
+                  aria-label={`${activeTime === "start" ? "Inicio" : "Término"} ${timeLabel(
+                    slot
+                  )}${extraHours > 0 ? `, ${extraHours} hora adicional` : ""}`}
                   onClick={() =>
-                    activeTime === "start" ? chooseStart(slot) : onEnd(slot)
+                    activeTime === "start" ? chooseStart(slot) : chooseEnd(slot)
                   }
                 >
-                  {timeLabel(slot)}
+                  <span>{timeLabel(slot)}</span>
+                  {extraHours > 0 && <small>+{extraHours} h</small>}
                 </button>
               );
             })}
@@ -1525,7 +1594,9 @@ function QuoteCard({ quote, selectedArea, guestCount, startTime, endTime, vatPer
         {quote.items.map((item) => (
           <div
             key={`${item.code}-${item.quantity}`}
-            style={{ padding: "13px 0", borderBottom: "1px solid rgba(29,29,31,.08)" }}
+            className={`java-quote-line ${
+              item.code === "SERVICE_AREA_TRANSPORT" ? "transport" : ""
+            }`}
           >
             <div className="summary-row">
               <span>{itemHumanLabel(item)}</span>
@@ -1648,19 +1719,6 @@ function SelectField({ label, value, onChange, options }) {
           </option>
         ))}
       </select>
-    </div>
-  );
-}
-
-function UploadField({ label, onFile }) {
-  return (
-    <div className="field" style={{ marginTop: 12 }}>
-      <label className="label">{label}</label>
-      <input
-        className="input"
-        type="file"
-        onChange={(e) => onFile(e.target.files?.[0])}
-      />
     </div>
   );
 }
