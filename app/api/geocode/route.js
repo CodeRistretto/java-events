@@ -1,4 +1,6 @@
-export async function POST(request) {
-  const body = await request.json();
-  return Response.json({ success: true, body });
+export async function POST() {
+  return Response.json(
+    { success: false, error: "Route not in use." },
+    { status: 404 }
+  );
 }
