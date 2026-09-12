@@ -861,6 +861,8 @@ function Styles() {
       }
 
       .confirmation-page {
+        --confirmation-readable-font: -apple-system, BlinkMacSystemFont,
+          "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         min-height: 100vh;
         background:
           radial-gradient(
@@ -871,6 +873,16 @@ function Styles() {
           #090909;
         color: white;
         padding: 32px 20px 70px;
+        font-family: var(--confirmation-readable-font);
+        font-size: 16px;
+        text-rendering: optimizeLegibility;
+      }
+
+      .confirmation-page .eyebrow,
+      .confirmation-page .hero-card h1,
+      .confirmation-page .section-heading h2,
+      .confirmation-page .payment-card > h2 {
+        font-family: var(--font-syne), Arial, sans-serif;
       }
 
       .confirmation-shell {
@@ -976,7 +988,8 @@ function Styles() {
 
       .status-title {
         font-size: 23px;
-        font-weight: 800;
+        font-weight: 700;
+        line-height: 1.25;
         margin-top: 3px;
       }
 
@@ -1011,7 +1024,10 @@ function Styles() {
 
       .event-number {
         font-size: 19px;
-        font-weight: 800;
+        font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+        font-weight: 700;
+        letter-spacing: 0.015em;
+        line-height: 1.4;
         margin-top: 5px;
         overflow-wrap: anywhere;
       }
@@ -1060,8 +1076,10 @@ function Styles() {
       }
 
       .base-service-title {
-        font-weight: 800;
-        font-size: 17px;
+        font-family: var(--confirmation-readable-font);
+        font-weight: 700;
+        font-size: 18px;
+        line-height: 1.4;
       }
 
       .base-service-card p {
@@ -1079,14 +1097,17 @@ function Styles() {
       }
 
       .item-name {
-        font-weight: 800;
-        line-height: 1.4;
+        font-family: var(--confirmation-readable-font);
+        font-weight: 700;
+        font-size: 16px;
+        line-height: 1.45;
       }
 
       .item-detail {
         color: #999;
-        font-size: 13px;
-        margin-top: 4px;
+        font-size: 14px;
+        line-height: 1.5;
+        margin-top: 5px;
       }
 
       .item-price {
@@ -1123,14 +1144,16 @@ function Styles() {
 
       .info-label {
         color: #909090;
-        font-size: 12px;
+        font-size: 13px;
+        line-height: 1.35;
         margin-bottom: 7px;
       }
 
       .info-value {
-        font-size: 16px;
-        font-weight: 750;
-        line-height: 1.45;
+        font-family: var(--confirmation-readable-font);
+        font-size: 17px;
+        font-weight: 650;
+        line-height: 1.5;
         overflow-wrap: anywhere;
       }
 
@@ -1173,14 +1196,16 @@ function Styles() {
       }
 
       .step-title {
-        font-weight: 800;
+        font-family: var(--confirmation-readable-font);
+        font-weight: 700;
+        line-height: 1.4;
       }
 
       .step-text {
         color: #9f9f9f;
-        line-height: 1.55;
-        font-size: 14px;
-        margin-top: 3px;
+        line-height: 1.6;
+        font-size: 15px;
+        margin-top: 4px;
       }
 
       .money-row {
