@@ -71,6 +71,8 @@ export async function POST(request) {
         baseSubtotal: centsToMoney(quote.baseSubtotalCents),
         addOnsTotal: centsToMoney(quote.addOnsTotalCents),
         transportFee: centsToMoney(quote.transportFeeCents),
+        transportNet: centsToMoney(quote.transportNetCents),
+        transportVat: centsToMoney(quote.transportVatCents),
         subtotal: centsToMoney(quote.subtotalCents),
         vat: centsToMoney(quote.vatCents),
         total: centsToMoney(quote.totalCents),
@@ -80,6 +82,10 @@ export async function POST(request) {
           ...item,
           unitPrice: centsToMoney(item.unitPriceCents),
           lineTotal: centsToMoney(item.lineTotalCents),
+          vatInclusiveLineTotal:
+            item.vatInclusiveLineTotalCents === undefined
+              ? null
+              : centsToMoney(item.vatInclusiveLineTotalCents),
         })),
       },
       serviceArea: quote.serviceArea,
