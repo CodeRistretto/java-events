@@ -10,6 +10,22 @@ function fieldByLabel(text) {
   );
 }
 
+function setControlledValue(element, value) {
+  if (!element || String(element.value) === String(value)) return;
+
+  const prototype =
+    element.tagName === "SELECT"
+      ? window.HTMLSelectElement.prototype
+      : window.HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+
+  if (setter) setter.call(element, value);
+  else element.value = value;
+
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 export default function EventFormHardening() {
   const pathname = usePathname();
   const [mount, setMount] = useState(null);
@@ -49,18 +65,24 @@ export default function EventFormHardening() {
       const waterDistance = fieldByLabel("Distancia aproximada al punto de agua (metros)");
       const electricity = fieldByLabel("Electricidad disponible") || fieldByLabel("Conexión eléctrica disponible");
 
-      if (water) water.style.display = "none";
-      if (waterDistance) waterDistance.style.display = "none";
+      // These legacy fields still exist in page.js and its pre-submit validation.
+      // Java now brings its own water, so keep them hidden and set harmless values
+      // in React state until the old database columns can eventually be removed.
+      if (water) {
+        water.style.display = "none";
+        setControlledValue(water.querySelector("select"), "yes");
+      }
+      if (waterDistance) {
+        waterDistance.style.display = "none";
+        setControlledValue(waterDistance.querySelector("input"), "0");
+      }
 
       const select = indoor?.querySelector("select");
       if (select) {
         Array.from(select.options).forEach((option) => {
           if (option.value === "BOTH") option.remove();
         });
-        if (select.value === "BOTH") {
-          select.value = "";
-          select.dispatchEvent(new Event("change", { bubbles: true }));
-        }
+        if (select.value === "BOTH") setControlledValue(select, "");
       }
 
       if (electricity) {
