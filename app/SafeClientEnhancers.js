@@ -4,6 +4,7 @@ import React from "react";
 import LocationPinEnhancer from "./LocationPinEnhancer";
 import MapVisibilityEnhancer from "./MapVisibilityEnhancer";
 import EventDurationGuard from "./EventDurationGuard";
+import CalendarAvailabilityEnhancer from "./CalendarAvailabilityEnhancer";
 import EventPhotoExperience from "./EventPhotoExperience";
 import LeadCaptureEnhancer from "./LeadCaptureEnhancer";
 import EventFormHardening from "./EventFormHardening";
@@ -43,6 +44,9 @@ export default function SafeClientEnhancers() {
       </EnhancerBoundary>
       <EnhancerBoundary name="EventDurationGuard">
         <EventDurationGuard />
+      </EnhancerBoundary>
+      <EnhancerBoundary name="CalendarAvailabilityEnhancer">
+        <CalendarAvailabilityEnhancer />
       </EnhancerBoundary>
       <EnhancerBoundary name="EventPhotoExperience">
         <EventPhotoExperience />
