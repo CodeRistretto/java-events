@@ -1,0 +1,134 @@
+.java-events-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 50% 44%, rgba(240, 90, 34, 0.075), transparent 28%),
+    #f7f7f8;
+}
+
+.java-events-loading-card {
+  width: min(420px, calc(100vw - 40px));
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+  animation: javaLoadingEnter 0.42s ease-out both;
+}
+
+.java-events-loading-kicker {
+  color: #f05a22;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.java-events-loading-orbit {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  margin: 8px 0 4px;
+  border: 1px solid rgba(29, 29, 31, 0.09);
+  border-radius: 50%;
+  animation: javaLoadingRotate 1.6s linear infinite;
+}
+
+.java-events-loading-orbit::before {
+  content: "";
+  position: absolute;
+  inset: 15px;
+  border: 1px solid rgba(240, 90, 34, 0.22);
+  border-radius: 50%;
+}
+
+.java-events-loading-orbit::after {
+  content: "";
+  position: absolute;
+  inset: 27px;
+  border-radius: 50%;
+  background: #f05a22;
+  box-shadow: 0 0 0 8px rgba(240, 90, 34, 0.08);
+}
+
+.java-events-loading-orbit span {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f05a22;
+}
+
+.java-events-loading-orbit span:nth-child(1) {
+  top: -4px;
+  left: 30px;
+}
+
+.java-events-loading-orbit span:nth-child(2) {
+  right: 4px;
+  bottom: 8px;
+  opacity: 0.55;
+}
+
+.java-events-loading-orbit span:nth-child(3) {
+  left: 4px;
+  bottom: 8px;
+  opacity: 0.25;
+}
+
+.java-events-loading-card > strong {
+  color: #1d1d1f;
+  font-size: clamp(20px, 3vw, 28px);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+}
+
+.java-events-loading-card > p {
+  margin: 0;
+  color: #7b7b82;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.java-events-loading-bar {
+  width: 150px;
+  height: 3px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(29, 29, 31, 0.07);
+}
+
+.java-events-loading-bar span {
+  display: block;
+  width: 46%;
+  height: 100%;
+  border-radius: inherit;
+  background: #f05a22;
+  animation: javaLoadingSweep 1.25s ease-in-out infinite;
+}
+
+@keyframes javaLoadingEnter {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes javaLoadingRotate {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes javaLoadingSweep {
+  0% { transform: translateX(-120%); }
+  55% { transform: translateX(120%); }
+  100% { transform: translateX(260%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .java-events-loading-card,
+  .java-events-loading-orbit,
+  .java-events-loading-bar span {
+    animation: none !important;
+  }
+}
