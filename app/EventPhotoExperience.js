@@ -4,8 +4,8 @@ import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
-const HERO_PHOTO = "/events/java-event-cart-02.webp";
-const SERVICE_PHOTO = "/events/java-event-cart-01.webp";
+const FALLBACK_HERO = "/events/java-event-cart-02.webp";
+const FALLBACK_SERVICE = "/events/java-event-cart-01.webp";
 
 const FALLBACK = {
   cupSizeOz: 12,
@@ -16,20 +16,37 @@ const FALLBACK = {
   cancellationRefundPercent: 50,
 };
 
+function setFavicon(url) {
+  if (!url || typeof document === "undefined") return;
+  let link = document.querySelector('link[rel="icon"]');
+  if (!link) {
+    link = document.createElement("link");
+    link.rel = "icon";
+    document.head.appendChild(link);
+  }
+  link.href = url;
+}
+
 export default function EventPhotoExperience() {
   const pathname = usePathname();
   const [mountNode, setMountNode] = useState(null);
+  const [heroPhoto, setHeroPhoto] = useState(FALLBACK_HERO);
+  const [servicePhoto, setServicePhoto] = useState(FALLBACK_SERVICE);
   const [service, setService] = useState(FALLBACK);
 
   useEffect(() => {
-    if (pathname !== "/") return;
-
     let cancelled = false;
+
     fetch("/api/event-config", { cache: "no-store" })
       .then((response) => response.json())
       .then((data) => {
         if (cancelled || !data?.success) return;
         const settings = data.settings || {};
+
+        setHeroPhoto(settings.hero_image_url || FALLBACK_HERO);
+        setServicePhoto(settings.service_image_url || FALLBACK_SERVICE);
+        setFavicon(settings.favicon_url || null);
+
         setService({
           cupSizeOz: Number(settings.cup_size_oz ?? 12),
           hotDrinks: Array.isArray(settings.included_hot_drinks)
@@ -49,7 +66,7 @@ export default function EventPhotoExperience() {
     return () => {
       cancelled = true;
     };
-  }, [pathname]);
+  }, []);
 
   useEffect(() => {
     if (pathname !== "/") {
@@ -69,7 +86,7 @@ export default function EventPhotoExperience() {
 
       if (hero) {
         hero.classList.add("java-events-real-hero");
-        hero.style.setProperty("--java-events-hero-photo", `url(${HERO_PHOTO})`);
+        hero.style.setProperty("--java-events-hero-photo", `url(${heroPhoto})`);
       }
 
       const existing = document.querySelector(".java-events-service-value-mount");
@@ -99,7 +116,7 @@ export default function EventPhotoExperience() {
         hero.style.removeProperty("--java-events-hero-photo");
       }
     };
-  }, [pathname]);
+  }, [pathname, heroPhoto]);
 
   if (!mountNode) return null;
 
@@ -149,7 +166,7 @@ export default function EventPhotoExperience() {
       </div>
 
       <figure className="java-events-service-photo">
-        <img src={SERVICE_PHOTO} alt="Java Coffee Cart operando en un evento" loading="lazy" />
+        <img src={servicePhoto} alt="Java Coffee Cart operando en un evento" loading="lazy" />
         <figcaption>Servicio real de Java Times Caffé en evento.</figcaption>
       </figure>
     </section>,
