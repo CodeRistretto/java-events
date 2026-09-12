@@ -38,9 +38,13 @@ export async function GET() {
         .eq("code", "JAVA_COFFEE_CART")
         .eq("active", true)
         .single(),
+      // Production already has the many-to-many coverage table, but older
+      // installations do not necessarily have active_from / active_to columns.
+      // For the public city selector we only need active coverage + an
+      // operational cart, so keep this query compatible with the live schema.
       supabaseAdmin
         .from("coffee_cart_service_areas")
-        .select("service_area_id,coffee_cart_id,active_from,active_to")
+        .select("service_area_id,coffee_cart_id")
         .eq("active", true),
       supabaseAdmin
         .from("coffee_carts")
@@ -62,14 +66,10 @@ export async function GET() {
 
     const now = Date.now();
     const activeCartIds = new Set((cartsResult.data || []).map((cart) => cart.id));
+
     const operationalAreaIds = new Set(
       (coverageResult.data || [])
-        .filter((row) => {
-          if (!activeCartIds.has(row.coffee_cart_id)) return false;
-          if (row.active_from && new Date(row.active_from).getTime() > now) return false;
-          if (row.active_to && new Date(row.active_to).getTime() <= now) return false;
-          return true;
-        })
+        .filter((row) => activeCartIds.has(row.coffee_cart_id))
         .map((row) => row.service_area_id)
     );
 
