@@ -1,5 +1,6 @@
 import { Syne } from "next/font/google";
 import "./globals.css";
+import "./apple-light.css";
 
 const syne = Syne({
   subsets: ["latin"],
@@ -10,8 +11,7 @@ const syne = Syne({
 
 export const metadata = {
   title: "Java Coffee Cart | Java Times Caffé",
-  description:
-    "Cotiza, aparta y paga tu evento con Java Coffee Cart.",
+  description: "Cotiza, aparta y paga tu evento con Java Coffee Cart.",
 };
 
 export default function RootLayout({ children }) {
