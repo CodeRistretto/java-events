@@ -1,228 +1,821 @@
 /* ============================================================
-   JAVA EVENTS — AUTHENTIC PHOTO + SERVICE VALUE EXPERIENCE
-   One real hero background, one supporting service photo, no repeated gallery.
+   JAVA EVENTS — CONVERSION LANDING + QUOTE CONFIDENCE
+   Clean, spacious, mobile-first and intentionally sales-oriented.
    ============================================================ */
 
-.app-shell .hero.java-events-real-hero {
-  position: relative;
-  min-height: 620px !important;
-  overflow: hidden;
-  background: #f7f7f8 !important;
+body:not(.java-quote-wizard-open) .java-floating-cart,
+body:not(.java-quote-wizard-open) .java-floating-cart-collapsed {
+  display: none !important;
 }
 
-.app-shell .hero.java-events-real-hero .hero-bg {
+.app-shell .hero.java-events-marketing-hero {
+  position: relative;
+  min-height: 720px !important;
+  overflow: hidden;
+  border-bottom: 1px solid rgba(29,29,31,.08) !important;
+  background: #f6f6f7 !important;
+}
+
+.app-shell .hero.java-events-marketing-hero .hero-bg {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, rgba(255,255,255,.98) 0%, rgba(255,255,255,.94) 34%, rgba(255,255,255,.72) 58%, rgba(255,255,255,.18) 100%),
-    linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.18)),
-    var(--java-events-hero-photo) center center / cover no-repeat !important;
+    linear-gradient(90deg, rgba(250,250,251,.99) 0%, rgba(250,250,251,.96) 36%, rgba(250,250,251,.78) 56%, rgba(250,250,251,.18) 100%),
+    linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.12)),
+    var(--java-events-hero-photo) 67% center / cover no-repeat !important;
   opacity: 1 !important;
 }
 
-.app-shell .hero.java-events-real-hero .hero-inner {
+.app-shell .hero.java-events-marketing-hero .hero-inner {
   position: relative;
   z-index: 2;
-  padding-top: 90px !important;
-  padding-bottom: 90px !important;
+  display: flex;
+  align-items: center;
+  min-height: 720px;
+  padding-top: 72px !important;
+  padding-bottom: 72px !important;
 }
 
-.app-shell .hero.java-events-real-hero .hero-grid {
-  max-width: 760px;
+.app-shell .hero.java-events-marketing-hero .eyebrow,
+.app-shell .hero.java-events-marketing-hero .hero-grid {
+  display: none !important;
 }
 
-.app-shell .hero.java-events-real-hero .hero-card {
-  background: rgba(255,255,255,.86) !important;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+.java-events-hero-mount {
+  width: min(780px, 68%);
 }
 
-.java-events-service-value-mount {
-  padding-top: 34px;
-}
-
-.java-events-service-value {
+.java-events-hero-content {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(320px, .75fr);
-  gap: 28px;
-  align-items: stretch;
-  padding: clamp(24px, 4vw, 42px);
-  border-radius: 30px;
-  background: #fff;
-  border: 1px solid rgba(29,29,31,.08);
-  box-shadow: 0 12px 36px rgba(0,0,0,.045);
+  gap: 0;
 }
 
+.java-events-hero-kicker,
 .java-events-photo-kicker {
   color: #f05a22;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 750;
   letter-spacing: .14em;
 }
 
-.java-events-service-copy h2 {
-  margin: 9px 0 12px;
+.java-events-hero-content h1 {
+  margin: 14px 0 20px;
   max-width: 760px;
-  font-family: var(--font-syne), sans-serif;
-  font-size: clamp(32px, 4.4vw, 56px);
-  line-height: 1;
-  letter-spacing: -.05em;
-  font-weight: 650;
   color: #1d1d1f;
-}
-
-.java-events-service-intro {
-  margin: 0 0 22px;
-  max-width: 740px;
-  color: #6e6e73;
-  line-height: 1.7;
-  font-size: 14px;
-}
-
-.java-events-service-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.java-events-service-card {
-  padding: 18px;
-  border: 1px solid rgba(29,29,31,.08);
-  border-radius: 18px;
-  background: #fbfbfd;
-}
-
-.java-events-service-card span {
-  display: block;
-  margin-bottom: 7px;
-  color: #8e8e93;
-  font-size: 10px;
+  font-family: var(--font-syne), sans-serif;
+  font-size: clamp(48px, 6vw, 82px);
+  line-height: .96;
+  letter-spacing: -.065em;
   font-weight: 700;
-  letter-spacing: .08em;
-  text-transform: uppercase;
 }
 
-.java-events-service-card strong {
-  display: block;
+.java-events-hero-content h1 span {
+  color: #f05a22;
+}
+
+.java-events-hero-lead {
+  max-width: 680px;
+  margin: 0;
+  color: #5f5f64;
+  font-size: clamp(16px, 1.55vw, 19px);
+  line-height: 1.65;
+}
+
+.java-events-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.java-events-hero-actions button,
+.java-events-inline-cta,
+.java-events-final-cta button {
+  min-height: 52px;
+  border-radius: 999px;
+  padding: 0 22px;
+  font-family: var(--font-syne), sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+}
+
+.java-events-hero-actions button:hover,
+.java-events-inline-cta:hover,
+.java-events-final-cta button:hover {
+  transform: translateY(-1px);
+}
+
+.java-events-hero-actions .primary,
+.java-events-inline-cta,
+.java-events-final-cta button {
+  border: 0;
+  background: #f05a22;
+  color: #fff;
+  box-shadow: 0 10px 28px rgba(240,90,34,.22);
+}
+
+.java-events-hero-actions .primary:hover,
+.java-events-inline-cta:hover,
+.java-events-final-cta button:hover {
+  background: #df4f19;
+  box-shadow: 0 14px 32px rgba(240,90,34,.26);
+}
+
+.java-events-hero-actions .secondary {
+  border: 1px solid rgba(29,29,31,.14);
+  background: rgba(255,255,255,.86);
+  color: #1d1d1f;
+  box-shadow: 0 7px 24px rgba(0,0,0,.05);
+  backdrop-filter: blur(12px);
+}
+
+.java-events-payment-promise {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto minmax(0,1.35fr);
+  gap: 18px;
+  align-items: center;
+  max-width: 650px;
+  margin-top: 30px;
+  padding: 17px 19px;
+  border: 1px solid rgba(29,29,31,.09);
+  border-radius: 20px;
+  background: rgba(255,255,255,.88);
+  box-shadow: 0 12px 36px rgba(0,0,0,.055);
+  backdrop-filter: blur(14px);
+}
+
+.java-events-payment-promise > div:not(.java-events-payment-arrow) {
+  display: grid;
+  gap: 3px;
+}
+
+.java-events-payment-promise small {
+  color: #8e8e93;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: .12em;
+}
+
+.java-events-payment-promise strong {
   color: #1d1d1f;
   font-size: 16px;
-  line-height: 1.45;
-  font-weight: 600;
+  line-height: 1.25;
 }
 
-.java-events-service-card p {
+.java-events-payment-promise span {
+  color: #6e6e73;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.java-events-payment-arrow {
+  color: #f05a22;
+  font-size: 20px;
+}
+
+.java-events-hero-proof {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.java-events-hero-proof span,
+.java-events-event-types span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(29,29,31,.09);
+  background: rgba(255,255,255,.78);
+  color: #55555a;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.java-events-landing-mount {
+  padding-top: 42px;
+  padding-bottom: 84px;
+}
+
+.java-events-landing {
+  display: grid;
+  gap: 30px;
+}
+
+.java-events-value-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid rgba(29,29,31,.08);
+  border-radius: 28px;
+  background: #fff;
+  box-shadow: 0 12px 36px rgba(0,0,0,.04);
+}
+
+.java-events-value-strip > div {
+  position: relative;
+  padding: 28px;
+}
+
+.java-events-value-strip > div + div {
+  border-left: 1px solid rgba(29,29,31,.08);
+}
+
+.java-events-value-strip span,
+.java-events-includes-grid article > .icon {
+  color: #f05a22;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.java-events-value-strip strong,
+.java-events-how-grid strong,
+.java-events-includes-grid strong {
+  display: block;
+  margin-top: 8px;
+  color: #1d1d1f;
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.java-events-value-strip p,
+.java-events-how-grid p,
+.java-events-includes-grid p {
   margin: 7px 0 0;
   color: #6e6e73;
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.java-events-service-policy {
-  margin-top: 14px;
-  padding: 17px 18px;
-  border-radius: 18px;
-  background: #fff7f2;
-  border: 1px solid rgba(240,90,34,.16);
-}
-
-.java-events-service-policy strong {
-  display: block;
-  color: #783013;
-  margin-bottom: 6px;
-}
-
-.java-events-service-policy p {
-  margin: 0;
-  color: #783013;
   font-size: 12px;
   line-height: 1.6;
 }
 
-.java-events-service-photo {
-  position: relative;
-  min-height: 100%;
-  margin: 0;
-  overflow: hidden;
-  border-radius: 24px;
-  background: #ececef;
+.java-events-story,
+.java-events-includes,
+.java-events-how,
+.java-events-faq,
+.java-events-final-cta {
   border: 1px solid rgba(29,29,31,.08);
+  border-radius: 30px;
+  background: #fff;
+  box-shadow: 0 12px 36px rgba(0,0,0,.04);
 }
 
-.java-events-service-photo img {
+.java-events-story {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) minmax(340px,.9fr);
+  gap: 34px;
+  align-items: stretch;
+  padding: 22px;
+}
+
+.java-events-story-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(20px, 4vw, 46px);
+}
+
+.java-events-story-copy h2,
+.java-events-section-heading h2,
+.java-events-payment-section h2,
+.java-events-final-cta h2 {
+  margin: 10px 0 13px;
+  color: #1d1d1f;
+  font-family: var(--font-syne), sans-serif;
+  font-size: clamp(34px, 4.3vw, 58px);
+  line-height: 1;
+  letter-spacing: -.055em;
+  font-weight: 680;
+}
+
+.java-events-story-copy > p,
+.java-events-section-heading > p,
+.java-events-payment-section > div:first-child > p,
+.java-events-final-cta p {
+  margin: 0;
+  max-width: 720px;
+  color: #6e6e73;
+  font-size: 14px;
+  line-height: 1.72;
+}
+
+.java-events-event-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.java-events-event-types span {
+  background: #f6f6f8;
+}
+
+.java-events-inline-cta {
+  align-self: flex-start;
+  margin-top: 24px;
+  min-height: 48px;
+}
+
+.java-events-story-photo {
+  position: relative;
+  min-height: 520px;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 22px;
+  background: #ececef;
+}
+
+.java-events-story-photo img {
   width: 100%;
   height: 100%;
-  min-height: 520px;
   display: block;
   object-fit: cover;
   object-position: center;
 }
 
-.java-events-service-photo::after {
-  content: "";
-  position: absolute;
-  inset: auto 0 0;
-  height: 34%;
-  background: linear-gradient(180deg, transparent, rgba(0,0,0,.6));
-  pointer-events: none;
+.java-events-how,
+.java-events-includes,
+.java-events-faq {
+  padding: clamp(28px, 5vw, 56px);
 }
 
-.java-events-service-photo figcaption {
-  position: absolute;
-  z-index: 2;
-  left: 18px;
-  right: 18px;
-  bottom: 16px;
-  color: #fff;
+.java-events-section-heading {
+  max-width: 760px;
+  margin-bottom: 26px;
+}
+
+.java-events-section-heading.compact {
+  max-width: 820px;
+}
+
+.java-events-how-grid,
+.java-events-includes-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 12px;
+}
+
+.java-events-how-grid article,
+.java-events-includes-grid article {
+  min-height: 190px;
+  padding: 20px;
+  border: 1px solid rgba(29,29,31,.08);
+  border-radius: 20px;
+  background: #fafafd;
+}
+
+.java-events-how-grid article > span {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #fff0e9;
+  color: #e6531c;
   font-size: 12px;
+  font-weight: 800;
+}
+
+.java-events-includes-grid article > .icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: #fff0e9;
+  font-size: 13px;
+}
+
+.java-events-menu-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.java-events-menu-grid > div {
+  padding: 22px;
+  border-radius: 20px;
+  border: 1px solid rgba(29,29,31,.08);
+  background: #fff;
+}
+
+.java-events-menu-grid span,
+.java-quote-confidence-grid span,
+.java-quote-confidence-payment span {
+  display: block;
+  margin-bottom: 7px;
+  color: #8e8e93;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .08em;
+}
+
+.java-events-menu-grid strong {
+  display: block;
+  color: #1d1d1f;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.java-events-menu-grid p {
+  margin: 8px 0 0;
+  color: #6e6e73;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.java-events-payment-section {
+  display: grid;
+  grid-template-columns: minmax(0,1.15fr) minmax(320px,.7fr);
+  gap: 36px;
+  align-items: center;
+  padding: clamp(30px, 5vw, 58px);
+  border-radius: 30px;
+  background: #1d1d1f;
+  box-shadow: 0 16px 46px rgba(0,0,0,.12);
+}
+
+.java-events-payment-section .java-events-photo-kicker {
+  color: #ff8f63;
+}
+
+.java-events-payment-section h2,
+.java-events-payment-section > div:first-child > p {
+  color: #fff;
+}
+
+.java-events-payment-section > div:first-child > p {
+  opacity: .72;
+}
+
+.java-events-payment-card {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 16px;
+  align-items: center;
+  padding: 24px;
+  border-radius: 22px;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.12);
+}
+
+.java-events-payment-card > div:not(.line) {
+  display: grid;
+  gap: 3px;
+}
+
+.java-events-payment-card span,
+.java-events-payment-card small {
+  color: rgba(255,255,255,.58);
+  font-size: 10px;
+}
+
+.java-events-payment-card strong {
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  font-size: 34px;
   font-weight: 600;
+  letter-spacing: -.04em;
+}
+
+.java-events-payment-card .line {
+  width: 1px;
+  height: 62px;
+  background: rgba(255,255,255,.16);
+}
+
+.java-events-faq-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 10px;
+}
+
+.java-events-faq details {
+  border: 1px solid rgba(29,29,31,.08);
+  border-radius: 16px;
+  background: #fafafd;
+  padding: 0 18px;
+}
+
+.java-events-faq summary {
+  position: relative;
+  list-style: none;
+  padding: 17px 28px 17px 0;
+  color: #1d1d1f;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.java-events-faq summary::-webkit-details-marker {
+  display: none;
+}
+
+.java-events-faq summary::after {
+  content: "+";
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #f05a22;
+  font-size: 18px;
+}
+
+.java-events-faq details[open] summary::after {
+  content: "–";
+}
+
+.java-events-faq details p {
+  margin: -2px 0 17px;
+  color: #6e6e73;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.java-events-final-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 26px;
+  padding: clamp(28px, 5vw, 52px);
+  background: linear-gradient(135deg, #fff 0%, #fff6f1 100%);
+}
+
+.java-events-final-cta h2 {
+  font-size: clamp(32px, 4vw, 50px);
+}
+
+.java-events-final-cta button {
+  flex: none;
+  min-height: 56px;
+  padding-inline: 26px;
+}
+
+/* ---------- Quote confidence panel ---------- */
+.java-quote-confidence-mount {
+  margin-top: 22px;
+}
+
+.java-quote-confidence {
+  padding-top: 22px;
+  border-top: 1px solid rgba(29,29,31,.09);
+}
+
+.java-quote-confidence-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+
+.java-quote-confidence-head span {
+  color: #f05a22;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+
+.java-quote-confidence-head h4 {
+  margin: 4px 0 0;
+  color: #1d1d1f;
+  font-size: 20px;
+  letter-spacing: -.03em;
+}
+
+.java-quote-confidence-head > strong {
+  min-width: 54px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: #fff0e9;
+  color: #dc4f19;
+  text-align: center;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  font-size: 14px;
+}
+
+.java-quote-confidence-grid,
+.java-quote-confidence-payment {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 10px;
+}
+
+.java-quote-confidence-grid > div,
+.java-quote-confidence-payment > div {
+  padding: 15px;
+  border: 1px solid rgba(29,29,31,.08);
+  border-radius: 15px;
+  background: #fafafd;
+}
+
+.java-quote-confidence-grid strong,
+.java-quote-confidence-payment strong {
+  display: block;
+  color: #1d1d1f;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.java-quote-confidence-payment {
+  margin-top: 10px;
+}
+
+.java-quote-confidence-payment > div:first-child {
+  background: #fff4ee;
+  border-color: rgba(240,90,34,.15);
+}
+
+.java-quote-confidence-payment p {
+  margin: 5px 0 0;
+  color: #6e6e73;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.java-quote-confidence-note {
+  margin: 12px 0 0;
+  color: #77777c;
+  font-size: 10px;
+  line-height: 1.55;
 }
 
 @media (max-width: 980px) {
-  .app-shell .hero.java-events-real-hero .hero-bg {
+  .app-shell .hero.java-events-marketing-hero .hero-bg {
     background:
-      linear-gradient(180deg, rgba(255,255,255,.96) 0%, rgba(255,255,255,.84) 52%, rgba(255,255,255,.25) 100%),
+      linear-gradient(180deg, rgba(250,250,251,.98) 0%, rgba(250,250,251,.92) 52%, rgba(250,250,251,.4) 100%),
       var(--java-events-hero-photo) center center / cover no-repeat !important;
   }
 
-  .app-shell .hero.java-events-real-hero .hero-grid {
-    max-width: none;
+  .java-events-hero-mount {
+    width: min(760px, 100%);
   }
 
-  .java-events-service-value {
+  .java-events-story,
+  .java-events-payment-section {
     grid-template-columns: 1fr;
   }
 
-  .java-events-service-photo img {
-    min-height: 360px;
+  .java-events-story-photo {
+    min-height: 380px;
+  }
+
+  .java-events-how-grid,
+  .java-events-includes-grid {
+    grid-template-columns: repeat(2, minmax(0,1fr));
   }
 }
 
-@media (max-width: 640px) {
-  .app-shell .hero.java-events-real-hero {
-    min-height: 700px !important;
+@media (max-width: 720px) {
+  .app-shell .hero.java-events-marketing-hero,
+  .app-shell .hero.java-events-marketing-hero .hero-inner {
+    min-height: 760px !important;
   }
 
-  .app-shell .hero.java-events-real-hero .hero-bg {
+  .app-shell .hero.java-events-marketing-hero .hero-inner {
+    align-items: flex-start;
+    padding-top: 72px !important;
+    padding-bottom: 52px !important;
+  }
+
+  .app-shell .hero.java-events-marketing-hero .hero-bg {
     background:
-      linear-gradient(180deg, rgba(255,255,255,.98) 0%, rgba(255,255,255,.9) 48%, rgba(255,255,255,.34) 100%),
+      linear-gradient(180deg, rgba(250,250,251,.99) 0%, rgba(250,250,251,.96) 57%, rgba(250,250,251,.58) 78%, rgba(250,250,251,.16) 100%),
       var(--java-events-hero-photo) 58% center / cover no-repeat !important;
   }
 
-  .java-events-service-value-mount {
-    padding-top: 22px;
+  .java-events-hero-content h1 {
+    font-size: clamp(43px, 12vw, 62px);
   }
 
-  .java-events-service-value {
-    padding: 20px;
-    border-radius: 24px;
-    gap: 20px;
+  .java-events-hero-lead {
+    font-size: 15px;
   }
 
-  .java-events-service-grid {
+  .java-events-hero-actions {
+    display: grid;
     grid-template-columns: 1fr;
   }
 
-  .java-events-service-photo img {
+  .java-events-hero-actions button {
+    width: 100%;
+  }
+
+  .java-events-payment-promise {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .java-events-payment-arrow {
+    transform: rotate(90deg);
+    justify-self: start;
+    margin-left: 12px;
+  }
+
+  .java-events-landing-mount {
+    padding-top: 20px;
+    padding-bottom: 70px;
+  }
+
+  .java-events-landing {
+    gap: 18px;
+  }
+
+  .java-events-value-strip {
+    grid-template-columns: 1fr;
+    border-radius: 24px;
+  }
+
+  .java-events-value-strip > div {
+    padding: 21px;
+  }
+
+  .java-events-value-strip > div + div {
+    border-left: 0;
+    border-top: 1px solid rgba(29,29,31,.08);
+  }
+
+  .java-events-story {
+    padding: 14px;
+    gap: 14px;
+    border-radius: 24px;
+  }
+
+  .java-events-story-copy {
+    padding: 18px 8px 8px;
+  }
+
+  .java-events-story-photo {
     min-height: 300px;
+    border-radius: 18px;
+  }
+
+  .java-events-how,
+  .java-events-includes,
+  .java-events-faq {
+    padding: 24px 18px;
+    border-radius: 24px;
+  }
+
+  .java-events-how-grid,
+  .java-events-includes-grid,
+  .java-events-menu-grid,
+  .java-events-faq-grid,
+  .java-quote-confidence-grid,
+  .java-quote-confidence-payment {
+    grid-template-columns: 1fr;
+  }
+
+  .java-events-how-grid article,
+  .java-events-includes-grid article {
+    min-height: 0;
+  }
+
+  .java-events-payment-section {
+    gap: 22px;
+    padding: 28px 20px;
+    border-radius: 24px;
+  }
+
+  .java-events-payment-card {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .java-events-payment-card .line {
+    width: 100%;
+    height: 1px;
+  }
+
+  .java-events-final-cta {
+    align-items: stretch;
+    flex-direction: column;
+    border-radius: 24px;
+    padding: 28px 20px;
+  }
+
+  .java-events-final-cta button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 430px) {
+  .app-shell .hero.java-events-marketing-hero,
+  .app-shell .hero.java-events-marketing-hero .hero-inner {
+    min-height: 810px !important;
+  }
+
+  .java-events-hero-proof span {
+    font-size: 9px;
+  }
+
+  .java-events-story-copy h2,
+  .java-events-section-heading h2,
+  .java-events-payment-section h2,
+  .java-events-final-cta h2 {
+    font-size: 34px;
   }
 }
