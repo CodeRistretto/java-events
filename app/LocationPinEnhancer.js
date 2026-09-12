@@ -80,10 +80,81 @@ function savePin(coords) {
   } catch {}
 }
 
+function splitCityState(label) {
+  const parts = String(label || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return {
+    city: parts[0] || "",
+    state: parts.slice(1).join(", ") || "",
+  };
+}
+
+async function geocodeAddress({ cityLabel, street, neighborhood, postalCode }) {
+  const { city, state } = splitCityState(cityLabel);
+  const candidates = [
+    [street, neighborhood, postalCode, city, state, "México"],
+    [neighborhood, postalCode, city, state, "México"],
+    [postalCode, city, state, "México"],
+    [city, state, "México"],
+  ];
+
+  for (const parts of candidates) {
+    const query = parts.filter(Boolean).join(", ");
+    if (!query) continue;
+
+    const url = new URL("https://nominatim.openstreetmap.org/search");
+    url.searchParams.set("format", "jsonv2");
+    url.searchParams.set("limit", "1");
+    url.searchParams.set("countrycodes", "mx");
+    url.searchParams.set("addressdetails", "1");
+    url.searchParams.set("q", query);
+
+    const response = await fetch(url.toString(), {
+      headers: { "Accept-Language": "es-MX,es;q=0.9" },
+    });
+
+    if (!response.ok) continue;
+    const rows = await response.json();
+    if (!Array.isArray(rows) || !rows[0]) continue;
+
+    const lat = Number(rows[0].lat);
+    const lng = Number(rows[0].lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
+    const hasStreet = String(street || "").trim().length >= 4;
+    const hasNeighborhood = String(neighborhood || "").trim().length >= 3;
+    const hasPostal = String(postalCode || "").trim().length >= 4;
+
+    return {
+      lat,
+      lng,
+      zoom: hasStreet ? 17 : hasNeighborhood ? 15 : hasPostal ? 14 : 12,
+      precision: hasStreet
+        ? "ADDRESS"
+        : hasNeighborhood
+        ? "NEIGHBORHOOD"
+        : hasPostal
+        ? "POSTAL_CODE"
+        : "CITY",
+      displayName: rows[0].display_name || query,
+    };
+  }
+
+  return null;
+}
+
 export default function LocationPinEnhancer() {
   const pathname = usePathname();
   const [mountNode, setMountNode] = useState(null);
   const [cityLabel, setCityLabel] = useState("");
+  const [address, setAddress] = useState({
+    street: "",
+    neighborhood: "",
+    postalCode: "",
+  });
   const [coords, setCoords] = useState(null);
   const coordsRef = useRef(null);
 
@@ -99,8 +170,7 @@ export default function LocationPinEnhancer() {
     }
 
     let currentMount = null;
-    let citySelect = null;
-    let cleanupCity = null;
+    let cleanupListeners = [];
 
     function mount() {
       const existing = document.querySelector(".java-location-pin-mount");
@@ -111,9 +181,10 @@ export default function LocationPinEnhancer() {
       }
 
       const addressField = findFieldByLabel("Calle y número");
+      const neighborhoodField = findFieldByLabel("Colonia");
       const postalField = findFieldByLabel("Código postal");
       const grid = addressField?.parentElement;
-      if (!addressField || !postalField || !grid) return;
+      if (!addressField || !neighborhoodField || !postalField || !grid) return;
 
       const node = document.createElement("div");
       node.className = "java-location-pin-mount";
@@ -121,22 +192,48 @@ export default function LocationPinEnhancer() {
       currentMount = node;
       setMountNode(node);
 
-      citySelect = document.querySelector("main.app-shell select.select");
-      const updateCity = () => {
+      const streetInput = addressField.querySelector("input");
+      const neighborhoodInput = neighborhoodField.querySelector("input");
+      const postalInput = postalField.querySelector("input");
+      const citySelect = document.querySelector("main.app-shell select.select");
+
+      const readAddress = () => {
+        setAddress({
+          street: streetInput?.value || "",
+          neighborhood: neighborhoodInput?.value || "",
+          postalCode: postalInput?.value || "",
+        });
+      };
+
+      const readCity = () => {
         const label = citySelect?.selectedOptions?.[0]?.textContent || "";
         setCityLabel(label);
+      };
+
+      const cityChanged = () => {
+        readCity();
         setCoords(null);
       };
 
-      const initialLabel = citySelect?.selectedOptions?.[0]?.textContent || "";
-      setCityLabel(initialLabel);
+      readAddress();
+      readCity();
 
       const stored = readStoredPin();
       if (stored) setCoords(stored);
 
+      [streetInput, neighborhoodInput, postalInput].forEach((input) => {
+        if (!input) return;
+        input.addEventListener("input", readAddress);
+        input.addEventListener("change", readAddress);
+        cleanupListeners.push(() => {
+          input.removeEventListener("input", readAddress);
+          input.removeEventListener("change", readAddress);
+        });
+      });
+
       if (citySelect) {
-        citySelect.addEventListener("change", updateCity);
-        cleanupCity = () => citySelect?.removeEventListener("change", updateCity);
+        citySelect.addEventListener("change", cityChanged);
+        cleanupListeners.push(() => citySelect.removeEventListener("change", cityChanged));
       }
     }
 
@@ -149,7 +246,7 @@ export default function LocationPinEnhancer() {
     return () => {
       clearTimeout(timer);
       observer.disconnect();
-      cleanupCity?.();
+      cleanupListeners.forEach((cleanup) => cleanup());
       currentMount?.remove();
     };
   }, [pathname]);
@@ -202,6 +299,7 @@ export default function LocationPinEnhancer() {
   return createPortal(
     <LocationPinPicker
       cityLabel={cityLabel}
+      address={address}
       coords={coords}
       onChange={setCoords}
     />,
@@ -209,12 +307,15 @@ export default function LocationPinEnhancer() {
   );
 }
 
-function LocationPinPicker({ cityLabel, coords, onChange }) {
+function LocationPinPicker({ cityLabel, address, coords, onChange }) {
   const mapEl = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
+  const placeRef = useRef(null);
   const [status, setStatus] = useState("Cargando mapa...");
   const [geoBusy, setGeoBusy] = useState(false);
+  const [addressBusy, setAddressBusy] = useState(false);
+  const [pinSource, setPinSource] = useState(coords ? "saved" : "none");
 
   const cityCenter = useMemo(() => centerForCity(cityLabel), [cityLabel]);
 
@@ -243,10 +344,18 @@ function LocationPinPicker({ cityLabel, coords, onChange }) {
           iconAnchor: [19, 43],
         });
 
-        function place(lat, lng, zoom = true) {
+        function place(lat, lng, options = {}) {
+          const {
+            zoom = 17,
+            moveMap = true,
+            source = "manual",
+            message = "Ubicación exacta seleccionada",
+            commit = true,
+          } = options;
+
           const next = {
-            lat: Number(lat.toFixed(6)),
-            lng: Number(lng.toFixed(6)),
+            lat: Number(Number(lat).toFixed(6)),
+            lng: Number(Number(lng).toFixed(6)),
           };
 
           if (!markerRef.current) {
@@ -257,24 +366,45 @@ function LocationPinPicker({ cityLabel, coords, onChange }) {
 
             markerRef.current.on("dragend", (event) => {
               const point = event.target.getLatLng();
-              place(point.lat, point.lng, false);
+              place(point.lat, point.lng, {
+                moveMap: false,
+                source: "manual",
+                message: "Ubicación exacta confirmada manualmente",
+                commit: true,
+              });
             });
           } else {
             markerRef.current.setLatLng([next.lat, next.lng]);
           }
 
-          if (zoom) map.setView([next.lat, next.lng], 17, { animate: true });
-          onChange(next);
-          setStatus("Ubicación exacta seleccionada");
+          if (moveMap) map.setView([next.lat, next.lng], zoom, { animate: true });
+          if (commit) onChange(next);
+          setPinSource(source);
+          setStatus(message);
         }
 
-        map.on("click", (event) => place(event.latlng.lat, event.latlng.lng));
+        placeRef.current = place;
+
+        map.on("click", (event) =>
+          place(event.latlng.lat, event.latlng.lng, {
+            source: "manual",
+            message: "Ubicación exacta confirmada manualmente",
+            commit: true,
+          })
+        );
+
         mapRef.current = map;
-        setStatus(coords ? "Ubicación exacta seleccionada" : "Haz clic en el mapa para colocar el pin");
+        setStatus(
+          coords
+            ? "Ubicación exacta seleccionada"
+            : "El mapa se actualizará con la dirección o puedes colocar el pin manualmente"
+        );
 
         setTimeout(() => map.invalidateSize(), 80);
       })
-      .catch(() => setStatus("No fue posible cargar el mapa. Recarga la página e inténtalo de nuevo."));
+      .catch(() =>
+        setStatus("No fue posible cargar el mapa. Recarga la página e inténtalo de nuevo.")
+      );
 
     return () => {
       cancelled = true;
@@ -282,6 +412,7 @@ function LocationPinPicker({ cityLabel, coords, onChange }) {
         mapRef.current.remove();
         mapRef.current = null;
         markerRef.current = null;
+        placeRef.current = null;
       }
     };
   }, []);
@@ -290,13 +421,63 @@ function LocationPinPicker({ cityLabel, coords, onChange }) {
     const map = mapRef.current;
     if (!map) return;
 
-    if (!coords) {
+    if (!coords && pinSource !== "address") {
       markerRef.current?.remove();
       markerRef.current = null;
       map.setView(cityCenter, 13, { animate: true });
-      setStatus("Haz clic en el mapa para colocar el pin");
     }
-  }, [cityCenter[0], cityCenter[1], coords]);
+  }, [cityCenter[0], cityCenter[1], coords, pinSource]);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    const timer = setTimeout(async () => {
+      setAddressBusy(true);
+
+      try {
+        const result = await geocodeAddress({ cityLabel, ...address });
+        const map = mapRef.current;
+        if (!map || !result) {
+          setStatus(
+            "No encontramos esa dirección automáticamente. Puedes colocar el pin manualmente."
+          );
+          return;
+        }
+
+        const hasStreet = String(address.street || "").trim().length >= 4;
+
+        if (hasStreet && placeRef.current) {
+          placeRef.current(result.lat, result.lng, {
+            zoom: result.zoom,
+            source: "address",
+            message:
+              "Ubicación estimada por la dirección. Revisa el pin y muévelo si es necesario.",
+            commit: true,
+          });
+        } else {
+          markerRef.current?.remove();
+          markerRef.current = null;
+          map.setView([result.lat, result.lng], result.zoom, { animate: true });
+          setPinSource("preview");
+          setStatus(
+            result.precision === "POSTAL_CODE"
+              ? "Mapa actualizado con el código postal. Agrega calle y número para colocar el pin."
+              : result.precision === "NEIGHBORHOOD"
+              ? "Mapa actualizado con la colonia. Agrega calle y número para colocar el pin."
+              : "Mapa actualizado con la ciudad y el estado."
+          );
+        }
+      } catch {
+        setStatus(
+          "No pudimos actualizar el mapa automáticamente. Puedes colocar el pin manualmente."
+        );
+      } finally {
+        setAddressBusy(false);
+      }
+    }, 900);
+
+    return () => clearTimeout(timer);
+  }, [cityLabel, address.street, address.neighborhood, address.postalCode]);
 
   function useMyLocation() {
     if (!navigator.geolocation) {
@@ -309,37 +490,14 @@ function LocationPinPicker({ cityLabel, coords, onChange }) {
 
     navigator.geolocation.getCurrentPosition(
       ({ coords: current }) => {
-        const next = {
-          lat: Number(current.latitude.toFixed(6)),
-          lng: Number(current.longitude.toFixed(6)),
-        };
-        onChange(next);
-        const map = mapRef.current;
-        if (map && window.L) {
-          if (!markerRef.current) {
-            const pinIcon = window.L.divIcon({
-              className: "java-map-pin-shell",
-              html: '<div class="java-map-pin-dot"><span></span></div>',
-              iconSize: [38, 46],
-              iconAnchor: [19, 43],
-            });
-            markerRef.current = window.L.marker([next.lat, next.lng], {
-              draggable: true,
-              icon: pinIcon,
-            }).addTo(map);
-            markerRef.current.on("dragend", (event) => {
-              const point = event.target.getLatLng();
-              onChange({
-                lat: Number(point.lat.toFixed(6)),
-                lng: Number(point.lng.toFixed(6)),
-              });
-            });
-          } else {
-            markerRef.current.setLatLng([next.lat, next.lng]);
-          }
-          map.setView([next.lat, next.lng], 17, { animate: true });
+        if (placeRef.current) {
+          placeRef.current(current.latitude, current.longitude, {
+            zoom: 17,
+            source: "device",
+            message: "Ubicación exacta obtenida desde tu dispositivo",
+            commit: true,
+          });
         }
-        setStatus("Ubicación exacta seleccionada");
         setGeoBusy(false);
       },
       () => {
@@ -355,10 +513,11 @@ function LocationPinPicker({ cityLabel, coords, onChange }) {
       <div className="java-location-head">
         <div>
           <div className="java-location-kicker">UBICACIÓN EXACTA</div>
-          <h4>Coloca el pin donde será el evento</h4>
+          <h4>La ubicación se actualiza mientras escribes la dirección</h4>
           <p>
-            La dirección escrita nos sirve como referencia. El pin nos indica el
-            punto exacto al que debe llegar el equipo de Java Coffee Cart.
+            Java usa ciudad, estado, código postal, colonia y calle para centrar el mapa.
+            Cuando escribas la calle y número colocaremos un pin estimado que puedes mover
+            hasta el acceso exacto del evento.
           </p>
         </div>
 
@@ -377,19 +536,20 @@ function LocationPinPicker({ cityLabel, coords, onChange }) {
         <div className={`java-location-status ${coords ? "selected" : ""}`}>
           <span className="java-location-status-dot" />
           <div>
-            <strong>{status}</strong>
+            <strong>{addressBusy ? "Actualizando mapa..." : status}</strong>
             <small>
               {coords
                 ? `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)} · Puedes mover el pin arrastrándolo.`
-                : `Zona seleccionada: ${cityLabel || "Java Events"}`}
+                : [address.postalCode, cityLabel].filter(Boolean).join(" · ") || "Completa la dirección para ubicar el evento"}
             </small>
           </div>
         </div>
       </div>
 
       <div className="java-location-note">
-        <strong>Importante:</strong> antes de apartar la fecha debes colocar el pin.
-        Java validará que el punto se encuentre dentro de la zona de servicio configurada.
+        <strong>Cómo funciona:</strong> ciudad y estado ubican la zona; el código postal y la
+        colonia acercan el mapa; la calle y número colocan el pin estimado. Antes de apartar,
+        verifica que el pin esté exactamente donde debe llegar el equipo.
       </div>
     </section>
   );
