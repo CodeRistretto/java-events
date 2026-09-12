@@ -1503,7 +1503,13 @@ function EventSchedulePicker({
                   aria-pressed={selected}
                   aria-label={`${activeTime === "start" ? "Inicio" : "Término"} ${timeLabel(
                     slot
-                  )}${extraHours > 0 ? `, ${extraHours} hora adicional` : ""}`}
+                  )}${
+                    extraHours > 0
+                      ? `, ${extraHours} ${
+                          extraHours === 1 ? "hora adicional" : "horas adicionales"
+                        }`
+                      : ""
+                  }`}
                   onClick={() =>
                     activeTime === "start" ? chooseStart(slot) : chooseEnd(slot)
                   }
