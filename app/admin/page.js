@@ -493,6 +493,18 @@ function AddOnRow({ addOn, onSave }) {
       >
         Save
       </button>
+
+      <label className={styles.addOnDescription}>
+        <span>Descripción que verá el cliente</span>
+        <textarea
+          className={styles.input}
+          value={form.description}
+          placeholder="Explica claramente qué incluye este extra."
+          onChange={(e) =>
+            setForm({ ...form, description: e.target.value })
+          }
+        />
+      </label>
     </div>
   );
 }
@@ -548,6 +560,18 @@ function NewAddOn({ onSave }) {
           )}
         </select>
       </div>
+
+      <label className={styles.addOnDescription}>
+        <span>Descripción que verá el cliente</span>
+        <textarea
+          className={styles.input}
+          value={form.description}
+          placeholder="Explica claramente qué incluye este extra."
+          onChange={(e) =>
+            setForm({ ...form, description: e.target.value })
+          }
+        />
+      </label>
 
       <button
         className={styles.button}
