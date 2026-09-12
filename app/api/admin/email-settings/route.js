@@ -110,9 +110,11 @@ export async function POST(request) {
       if (!["SHOPIFY_INVOICE", "APP_EMAIL"].includes(provider)) {
         throw new Error("Proveedor de correo no válido.");
       }
-      if (!["EVENT_DATE_OFFSET", "BOOKING_AGE_INTERVAL"].includes(triggerType)) {
+      if (!["EVENT_DATE_OFFSET", "LEAD_AGE_INTERVAL", "BOOKING_AGE_INTERVAL"].includes(triggerType)) {
         throw new Error("Tipo de automatización no válido.");
       }
+
+      const intervalTrigger = ["LEAD_AGE_INTERVAL", "BOOKING_AGE_INTERVAL"].includes(triggerType);
 
       const row = {
         code: ruleCode,
@@ -124,10 +126,9 @@ export async function POST(request) {
           triggerType === "EVENT_DATE_OFFSET"
             ? Math.max(0, Number(payload.offsetDays || 0))
             : null,
-        interval_days:
-          triggerType === "BOOKING_AGE_INTERVAL"
-            ? Math.max(1, Number(payload.intervalDays || 30))
-            : null,
+        interval_days: intervalTrigger
+          ? Math.max(1, Number(payload.intervalDays || 30))
+          : null,
         max_sends: Math.max(1, Number(payload.maxSends || 1)),
         requires_deposit_paid: Boolean(payload.requiresDepositPaid),
         requires_balance_pending: Boolean(payload.requiresBalancePending),
