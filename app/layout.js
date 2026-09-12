@@ -11,6 +11,7 @@ import "./floating-event-cart.css";
 import "./quote-wizard.css";
 import "./status-toast.css";
 import "./calendar-availability.css";
+import "./loading-experience.css";
 import SafeClientEnhancers from "./SafeClientEnhancers";
 
 const syne = Syne({
