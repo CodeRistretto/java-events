@@ -12,11 +12,15 @@ export default function StatusToastEnhancer() {
   useEffect(() => {
     if (pathname !== "/") return;
 
-    function show(text) {
+    function show(text, tone = "success") {
       if (!text) return;
       clearTimeout(timerRef.current);
-      setToast({ id: Date.now(), text });
+      setToast({ id: Date.now(), text, tone });
       timerRef.current = setTimeout(() => setToast(null), 10000);
+    }
+
+    function customToast(event) {
+      show(event.detail?.text, event.detail?.tone || "success");
     }
 
     function sync() {
@@ -37,7 +41,7 @@ export default function StatusToastEnhancer() {
 
         if (node.dataset.javaToastHandled !== text) {
           node.dataset.javaToastHandled = text;
-          show(text);
+          show(text, "success");
         }
       }
     }
@@ -51,11 +55,13 @@ export default function StatusToastEnhancer() {
       attributes: true,
       attributeFilter: ["class"],
     });
+    window.addEventListener("java:toast", customToast);
 
     return () => {
       clearTimeout(timer);
       clearTimeout(timerRef.current);
       observer.disconnect();
+      window.removeEventListener("java:toast", customToast);
       document
         .querySelectorAll(".java-status-toast-source-hidden")
         .forEach((node) => node.classList.remove("java-status-toast-source-hidden"));
@@ -64,9 +70,15 @@ export default function StatusToastEnhancer() {
 
   if (pathname !== "/" || !toast || typeof document === "undefined") return null;
 
+  const warning = toast.tone === "warning";
+
   return createPortal(
-    <div className="java-status-toast" role="status" aria-live="polite">
-      <div className="java-status-toast-icon">✓</div>
+    <div
+      className={`java-status-toast ${warning ? "warning" : "success"}`}
+      role="status"
+      aria-live="polite"
+    >
+      <div className="java-status-toast-icon">{warning ? "!" : "✓"}</div>
       <div className="java-status-toast-copy">
         <small>JAVA EVENTS</small>
         <strong>{toast.text}</strong>
