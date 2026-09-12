@@ -9,6 +9,7 @@ import "./lead-capture.css";
 import "./event-requirements.css";
 import "./floating-event-cart.css";
 import "./quote-wizard.css";
+import "./status-toast.css";
 import SafeClientEnhancers from "./SafeClientEnhancers";
 
 const syne = Syne({
