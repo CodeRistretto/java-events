@@ -15,6 +15,7 @@ import FloatingEventCart from "./FloatingEventCart";
 import PublicCopyEnhancer from "./PublicCopyEnhancer";
 import LoadingExperience from "./LoadingExperience";
 import ElevatorAccessCleanup from "./ElevatorAccessCleanup";
+import EmbedAutoOpen from "./EmbedAutoOpen";
 
 class EnhancerBoundary extends React.Component {
   constructor(props) {
@@ -71,6 +72,9 @@ export default function SafeClientEnhancers() {
       </EnhancerBoundary>
       <EnhancerBoundary name="QuoteFlowWizard">
         <QuoteFlowWizard />
+      </EnhancerBoundary>
+      <EnhancerBoundary name="EmbedAutoOpen">
+        <EmbedAutoOpen />
       </EnhancerBoundary>
       <EnhancerBoundary name="StatusToastEnhancer">
         <StatusToastEnhancer />
