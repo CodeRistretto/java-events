@@ -233,6 +233,41 @@
   cursor: not-allowed;
 }
 
+body[data-java-start-chosen="0"] .java-time-tabs button:first-child strong,
+body[data-java-end-chosen="0"] .java-time-tabs button:nth-child(2) strong {
+  font-size: 0;
+}
+
+body[data-java-start-chosen="0"] .java-time-tabs button:first-child strong::after,
+body[data-java-end-chosen="0"] .java-time-tabs button:nth-child(2) strong::after {
+  content: "Selecciona";
+  font-size: 16px;
+  color: #6e6e73;
+}
+
+body[data-java-end-chosen="0"] .java-datetime-summary strong {
+  font-size: 0;
+}
+
+body[data-java-start-chosen="0"] .java-datetime-summary strong::after {
+  content: "Selecciona inicio y término";
+  font-size: 18px;
+}
+
+body[data-java-start-chosen="1"][data-java-end-chosen="0"] .java-datetime-summary strong::after {
+  content: "Selecciona la hora de término";
+  font-size: 18px;
+}
+
+.java-setup-select-wrap {
+  display: grid;
+  gap: 7px;
+}
+
+.java-setup-select-wrap .caption {
+  line-height: 1.45;
+}
+
 @media (max-width: 900px) {
   .java-quote-wizard-panel {
     top: 0;
