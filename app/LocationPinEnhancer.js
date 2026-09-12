@@ -59,24 +59,6 @@ function findFieldByLabel(text) {
   );
 }
 
-function setReactInputByLabel(labelText, value) {
-  if (!value) return;
-  const field = findFieldByLabel(labelText);
-  const input = field?.querySelector("input");
-  if (!input) return;
-
-  const setter = Object.getOwnPropertyDescriptor(
-    window.HTMLInputElement.prototype,
-    "value"
-  )?.set;
-
-  if (setter) setter.call(input, value);
-  else input.value = value;
-
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-  input.dispatchEvent(new Event("change", { bubbles: true }));
-}
-
 function readStoredPin() {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
@@ -164,37 +146,6 @@ async function geocodeAddress({ cityLabel, street, neighborhood, postalCode }) {
   return null;
 }
 
-async function reverseGeocode(lat, lng) {
-  const url = new URL("https://nominatim.openstreetmap.org/reverse");
-  url.searchParams.set("format", "jsonv2");
-  url.searchParams.set("lat", String(lat));
-  url.searchParams.set("lon", String(lng));
-  url.searchParams.set("zoom", "18");
-  url.searchParams.set("addressdetails", "1");
-
-  const response = await fetch(url.toString(), {
-    headers: { "Accept-Language": "es-MX,es;q=0.9" },
-  });
-
-  if (!response.ok) return null;
-  const row = await response.json();
-  const a = row?.address || {};
-
-  const street =
-    a.road || a.pedestrian || a.residential || a.footway || a.path || "";
-  const houseNumber = a.house_number || "";
-  const neighborhood =
-    a.neighbourhood || a.suburb || a.quarter || a.city_district || "";
-  const postalCode = a.postcode || "";
-
-  return {
-    street: [street, houseNumber].filter(Boolean).join(" ").trim(),
-    neighborhood,
-    postalCode,
-    displayName: row?.display_name || "",
-  };
-}
-
 export default function LocationPinEnhancer() {
   const pathname = usePathname();
   const [mountNode, setMountNode] = useState(null);
@@ -237,8 +188,7 @@ export default function LocationPinEnhancer() {
 
       const node = document.createElement("div");
       node.className = "java-location-pin-mount";
-      // Keep the address fields and the map inside the SAME grid/visual section.
-      grid.appendChild(node);
+      grid.parentElement?.insertBefore(node, grid.nextSibling);
       currentMount = node;
       setMountNode(node);
 
@@ -362,41 +312,12 @@ function LocationPinPicker({ cityLabel, address, coords, onChange }) {
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const placeRef = useRef(null);
-  const reverseRequestRef = useRef(0);
   const [status, setStatus] = useState("Cargando mapa...");
   const [geoBusy, setGeoBusy] = useState(false);
   const [addressBusy, setAddressBusy] = useState(false);
-  const [reverseBusy, setReverseBusy] = useState(false);
   const [pinSource, setPinSource] = useState(coords ? "saved" : "none");
 
   const cityCenter = useMemo(() => centerForCity(cityLabel), [cityLabel]);
-
-  async function fillAddressFromPin(point) {
-    const requestId = Date.now();
-    reverseRequestRef.current = requestId;
-    setReverseBusy(true);
-
-    try {
-      const result = await reverseGeocode(point.lat, point.lng);
-      if (reverseRequestRef.current !== requestId || !result) return;
-
-      if (result.street) setReactInputByLabel("Calle y número", result.street);
-      if (result.neighborhood) setReactInputByLabel("Colonia", result.neighborhood);
-      if (result.postalCode) setReactInputByLabel("Código postal", result.postalCode);
-
-      setStatus(
-        result.street
-          ? "Dirección encontrada desde el pin. Revísala y corrige cualquier detalle si hace falta."
-          : "Pin confirmado. No encontramos un número de calle exacto; completa la dirección manualmente."
-      );
-    } catch {
-      setStatus(
-        "Pin confirmado. No pudimos completar la dirección automáticamente; puedes escribirla manualmente."
-      );
-    } finally {
-      if (reverseRequestRef.current === requestId) setReverseBusy(false);
-    }
-  }
 
   useEffect(() => {
     let cancelled = false;
@@ -430,7 +351,6 @@ function LocationPinPicker({ cityLabel, address, coords, onChange }) {
             source = "manual",
             message = "Ubicación exacta seleccionada",
             commit = true,
-            reverse = false,
           } = options;
 
           const next = {
@@ -451,7 +371,6 @@ function LocationPinPicker({ cityLabel, address, coords, onChange }) {
                 source: "manual",
                 message: "Ubicación exacta confirmada manualmente",
                 commit: true,
-                reverse: true,
               });
             });
           } else {
@@ -462,7 +381,6 @@ function LocationPinPicker({ cityLabel, address, coords, onChange }) {
           if (commit) onChange(next);
           setPinSource(source);
           setStatus(message);
-          if (reverse) fillAddressFromPin(next);
         }
 
         placeRef.current = place;
@@ -472,7 +390,6 @@ function LocationPinPicker({ cityLabel, address, coords, onChange }) {
             source: "manual",
             message: "Ubicación exacta confirmada manualmente",
             commit: true,
-            reverse: true,
           })
         );
 
@@ -480,7 +397,7 @@ function LocationPinPicker({ cityLabel, address, coords, onChange }) {
         setStatus(
           coords
             ? "Ubicación exacta seleccionada"
-            : "Escribe la dirección o coloca el pin directamente en el mapa"
+            : "El mapa se actualizará con la dirección o puedes colocar el pin manualmente"
         );
 
         setTimeout(() => map.invalidateSize(), 80);
@@ -521,7 +438,6 @@ function LocationPinPicker({ cityLabel, address, coords, onChange }) {
         const result = await geocodeAddress({ cityLabel, ...address });
         const map = mapRef.current;
         if (!map || !result) {
-          onChange(null);
           setStatus(
             "No encontramos esa dirección automáticamente. Puedes colocar el pin manualmente."
           );
@@ -537,25 +453,21 @@ function LocationPinPicker({ cityLabel, address, coords, onChange }) {
             message:
               "Ubicación estimada por la dirección. Revisa el pin y muévelo si es necesario.",
             commit: true,
-            reverse: false,
           });
         } else {
-          // Never keep stale coordinates after the address was cleared/changed.
-          onChange(null);
           markerRef.current?.remove();
           markerRef.current = null;
           map.setView([result.lat, result.lng], result.zoom, { animate: true });
           setPinSource("preview");
           setStatus(
             result.precision === "POSTAL_CODE"
-              ? "Mapa actualizado con el código postal. Agrega calle y número o coloca el pin."
+              ? "Mapa actualizado con el código postal. Agrega calle y número para colocar el pin."
               : result.precision === "NEIGHBORHOOD"
-              ? "Mapa actualizado con la colonia. Agrega calle y número o coloca el pin."
+              ? "Mapa actualizado con la colonia. Agrega calle y número para colocar el pin."
               : "Mapa actualizado con la ciudad y el estado."
           );
         }
       } catch {
-        onChange(null);
         setStatus(
           "No pudimos actualizar el mapa automáticamente. Puedes colocar el pin manualmente."
         );
@@ -584,7 +496,6 @@ function LocationPinPicker({ cityLabel, address, coords, onChange }) {
             source: "device",
             message: "Ubicación exacta obtenida desde tu dispositivo",
             commit: true,
-            reverse: true,
           });
         }
         setGeoBusy(false);
@@ -601,12 +512,12 @@ function LocationPinPicker({ cityLabel, address, coords, onChange }) {
     <section className="java-location-picker">
       <div className="java-location-head">
         <div>
-          <div className="java-location-kicker">DIRECCIÓN + UBICACIÓN EXACTA</div>
-          <h4>Escribe la dirección o coloca directamente el pin</h4>
+          <div className="java-location-kicker">UBICACIÓN EXACTA</div>
+          <h4>La ubicación se actualiza mientras escribes la dirección</h4>
           <p>
-            Si colocas o mueves el pin, Java intentará completar automáticamente la
-            calle, número, colonia y código postal encontrados. Revisa siempre los
-            datos antes de apartar.
+            Java usa ciudad, estado, código postal, colonia y calle para centrar el mapa.
+            Cuando escribas la calle y número colocaremos un pin estimado que puedes mover
+            hasta el acceso exacto del evento.
           </p>
         </div>
 
@@ -625,27 +536,20 @@ function LocationPinPicker({ cityLabel, address, coords, onChange }) {
         <div className={`java-location-status ${coords ? "selected" : ""}`}>
           <span className="java-location-status-dot" />
           <div>
-            <strong>
-              {reverseBusy
-                ? "Buscando calle y número desde el pin..."
-                : addressBusy
-                ? "Actualizando mapa..."
-                : status}
-            </strong>
+            <strong>{addressBusy ? "Actualizando mapa..." : status}</strong>
             <small>
               {coords
                 ? `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)} · Puedes mover el pin arrastrándolo.`
-                : [address.postalCode, cityLabel].filter(Boolean).join(" · ") ||
-                  "Completa la dirección o toca el mapa para ubicar el evento"}
+                : [address.postalCode, cityLabel].filter(Boolean).join(" · ") || "Completa la dirección para ubicar el evento"}
             </small>
           </div>
         </div>
       </div>
 
       <div className="java-location-note">
-        <strong>Importante:</strong> el pin debe señalar el acceso real por donde llegará
-        el equipo. Si OpenStreetMap no encuentra un número exacto, completa o corrige
-        manualmente la dirección antes de continuar.
+        <strong>Cómo funciona:</strong> ciudad y estado ubican la zona; el código postal y la
+        colonia acercan el mapa; la calle y número colocan el pin estimado. Antes de apartar,
+        verifica que el pin esté exactamente donde debe llegar el equipo.
       </div>
     </section>
   );
