@@ -29,6 +29,9 @@ export default function EventPhotoExperience() {
     function mount() {
       const heroInner = document.querySelector("main.app-shell .hero .hero-inner");
       const pageGrid = document.querySelector("main.app-shell .page-grid");
+      const quotePanel = pageGrid?.querySelector(".panel");
+
+      if (quotePanel && !quotePanel.id) quotePanel.id = "cotiza-java-evento";
 
       if (heroInner && !document.querySelector(".java-events-photo-hero-mount")) {
         heroNode = document.createElement("div");
