@@ -189,6 +189,7 @@ textarea:focus-visible {
   font-size: 13px;
   font-weight: 500;
   transition: 0.15s ease;
+  scroll-margin-block: 190px 112px;
 }
 
 .java-calendar-days button:hover:not(:disabled):not(.selected) {
@@ -296,6 +297,7 @@ textarea:focus-visible {
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   transition: 0.15s ease;
+  scroll-margin-block: 190px 112px;
 }
 
 .java-time-slots button > span,
