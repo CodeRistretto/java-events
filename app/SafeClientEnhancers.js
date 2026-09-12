@@ -11,7 +11,6 @@ import EventFormHardening from "./EventFormHardening";
 import QuoteFlowWizard from "./QuoteFlowWizard";
 import StatusToastEnhancer from "./StatusToastEnhancer";
 import ConfirmationPaymentCTA from "./ConfirmationPaymentCTA";
-import FloatingEventCart from "./FloatingEventCart";
 import PublicCopyEnhancer from "./PublicCopyEnhancer";
 import LoadingExperience from "./LoadingExperience";
 import ElevatorAccessCleanup from "./ElevatorAccessCleanup";
@@ -78,9 +77,6 @@ export default function SafeClientEnhancers() {
       </EnhancerBoundary>
       <EnhancerBoundary name="StatusToastEnhancer">
         <StatusToastEnhancer />
-      </EnhancerBoundary>
-      <EnhancerBoundary name="FloatingEventCart">
-        <FloatingEventCart />
       </EnhancerBoundary>
       <EnhancerBoundary name="ConfirmationPaymentCTA">
         <ConfirmationPaymentCTA />
