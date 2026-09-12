@@ -70,11 +70,12 @@ export default function AdminPage() {
 
     if (!res.ok || !json.success) {
       setError(json.error || "No se pudo guardar.");
-      return;
+      return false;
     }
 
     setMessage("Guardado.");
     await load();
+    return true;
   }
 
   if (!data) {
@@ -191,6 +192,11 @@ export default function AdminPage() {
         {tab === "areas" && (
           <div className={styles.card}>
             <h2>Event Service Areas</h2>
+
+            <NewServiceArea
+              carts={data.carts || []}
+              onSave={(payload) => save("CREATE_SERVICE_AREA", payload)}
+            />
 
             {(data.serviceAreas || []).map((area) => (
               <AreaRow
@@ -599,6 +605,30 @@ function AreaRow({ area, onSave }) {
         />
 
         <Field
+          label="Center latitude"
+          type="number"
+          min="-90"
+          max="90"
+          step="any"
+          value={form.centerLat}
+          onChange={(value) =>
+            setForm({ ...form, centerLat: value })
+          }
+        />
+
+        <Field
+          label="Center longitude"
+          type="number"
+          min="-180"
+          max="180"
+          step="any"
+          value={form.centerLng}
+          onChange={(value) =>
+            setForm({ ...form, centerLng: value })
+          }
+        />
+
+        <Field
           label="Postal codes comma-separated"
           value={form.postalCodes}
           onChange={(value) =>
@@ -606,6 +636,15 @@ function AreaRow({ area, onSave }) {
           }
         />
       </div>
+
+      <label className={styles.notesField}>
+        <span>Internal notes</span>
+        <textarea
+          className={styles.input}
+          value={form.notes}
+          onChange={(e) => setForm({ ...form, notes: e.target.value })}
+        />
+      </label>
 
       <label>
         <input
@@ -626,6 +665,185 @@ function AreaRow({ area, onSave }) {
           Save area
         </button>
       </div>
+    </div>
+  );
+}
+
+function NewServiceArea({ carts, onSave }) {
+  const eligibleCarts = carts.filter(
+    (cart) => cart.active && cart.status !== "INACTIVE"
+  );
+  const initialCartIds = eligibleCarts.map((cart) => cart.id);
+  const emptyForm = {
+    city: "",
+    state: "Coahuila",
+    active: true,
+    minimumGuests: "100",
+    transportFee: "0.00",
+    centerLat: "",
+    centerLng: "",
+    radiusKm: "",
+    postalCodes: "",
+    notes: "",
+  };
+  const [form, setForm] = useState(emptyForm);
+  const [cartIds, setCartIds] = useState(initialCartIds);
+  const [saving, setSaving] = useState(false);
+
+  function toggleCart(cartId) {
+    setCartIds((current) =>
+      current.includes(cartId)
+        ? current.filter((id) => id !== cartId)
+        : [...current, cartId]
+    );
+  }
+
+  async function createArea() {
+    setSaving(true);
+    try {
+      const saved = await onSave({ ...form, cartIds });
+      if (saved) {
+        setForm(emptyForm);
+        setCartIds(initialCartIds);
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className={`${styles.card} ${styles.newArea}`}>
+      <div className={styles.areaHead}>
+        <div>
+          <div className={styles.kicker}>NEW COVERAGE</div>
+          <h3>Add service area</h3>
+          <p className={styles.muted}>
+            Create a city, define its coverage and assign the Coffee Cart that
+            can serve it.
+          </p>
+        </div>
+        <label className={styles.activeToggle}>
+          <input
+            type="checkbox"
+            checked={form.active}
+            onChange={(e) => setForm({ ...form, active: e.target.checked })}
+          />{" "}
+          Active in quote
+        </label>
+      </div>
+
+      <div className={styles.grid}>
+        <Field
+          label="City *"
+          value={form.city}
+          placeholder="Example: Saltillo"
+          onChange={(value) => setForm({ ...form, city: value })}
+        />
+        <Field
+          label="State *"
+          value={form.state}
+          placeholder="Example: Coahuila"
+          onChange={(value) => setForm({ ...form, state: value })}
+        />
+        <Field
+          label="Transport fee MXN"
+          type="number"
+          min="0"
+          step="0.01"
+          value={form.transportFee}
+          onChange={(value) => setForm({ ...form, transportFee: value })}
+        />
+        <Field
+          label="Minimum guests"
+          type="number"
+          min="1"
+          step="1"
+          value={form.minimumGuests}
+          onChange={(value) => setForm({ ...form, minimumGuests: value })}
+        />
+        <Field
+          label="Center latitude"
+          type="number"
+          min="-90"
+          max="90"
+          step="any"
+          value={form.centerLat}
+          placeholder="Optional"
+          onChange={(value) => setForm({ ...form, centerLat: value })}
+        />
+        <Field
+          label="Center longitude"
+          type="number"
+          min="-180"
+          max="180"
+          step="any"
+          value={form.centerLng}
+          placeholder="Optional"
+          onChange={(value) => setForm({ ...form, centerLng: value })}
+        />
+        <Field
+          label="Radius km"
+          type="number"
+          min="0.1"
+          step="0.1"
+          value={form.radiusKm}
+          placeholder="Optional"
+          onChange={(value) => setForm({ ...form, radiusKm: value })}
+        />
+        <Field
+          label="Postal codes"
+          value={form.postalCodes}
+          placeholder="Comma-separated, e.g. 25200, 25210"
+          onChange={(value) => setForm({ ...form, postalCodes: value })}
+        />
+      </div>
+
+      <label className={styles.notesField}>
+        <span>Internal notes</span>
+        <textarea
+          className={styles.input}
+          value={form.notes}
+          placeholder="Optional operating notes"
+          onChange={(e) => setForm({ ...form, notes: e.target.value })}
+        />
+      </label>
+
+      <div className={styles.cartAssignment}>
+        <strong>Assigned Coffee Carts *</strong>
+        <p className={styles.muted}>
+          The area will only appear in the quote while at least one assigned
+          cart is available.
+        </p>
+        <div className={styles.cartChoices}>
+          {eligibleCarts.map((cart) => (
+            <label key={cart.id} className={styles.cartChoice}>
+              <input
+                type="checkbox"
+                checked={cartIds.includes(cart.id)}
+                onChange={() => toggleCart(cart.id)}
+              />
+              <span>
+                <strong>{cart.code}</strong>
+                <small>{cart.name}</small>
+              </span>
+            </label>
+          ))}
+          {!eligibleCarts.length && (
+            <div className={styles.error}>
+              Activate a Coffee Cart before creating a service area.
+            </div>
+          )}
+        </div>
+      </div>
+
+      <button
+        className={styles.button}
+        style={{ marginTop: 16 }}
+        disabled={saving || !eligibleCarts.length}
+        onClick={createArea}
+      >
+        {saving ? "Creating…" : "Create service area"}
+      </button>
     </div>
   );
 }
@@ -716,7 +934,16 @@ function CartRow({ cart, onSave }) {
   );
 }
 
-function Field({ label, value, onChange }) {
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder = "",
+  type = "text",
+  min,
+  max,
+  step,
+}) {
   return (
     <label>
       <div className={styles.muted} style={{ marginBottom: 5 }}>
@@ -725,6 +952,11 @@ function Field({ label, value, onChange }) {
 
       <input
         className={styles.input}
+        type={type}
+        min={min}
+        max={max}
+        step={step}
+        placeholder={placeholder}
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value)}
       />
