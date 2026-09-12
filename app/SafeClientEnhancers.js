@@ -6,6 +6,7 @@ import EventDurationGuard from "./EventDurationGuard";
 import EventPhotoExperience from "./EventPhotoExperience";
 import LeadCaptureEnhancer from "./LeadCaptureEnhancer";
 import EventFormHardening from "./EventFormHardening";
+import QuoteFlowWizard from "./QuoteFlowWizard";
 import ConfirmationPaymentCTA from "./ConfirmationPaymentCTA";
 import FloatingEventCart from "./FloatingEventCart";
 
@@ -46,6 +47,9 @@ export default function SafeClientEnhancers() {
       </EnhancerBoundary>
       <EnhancerBoundary name="EventFormHardening">
         <EventFormHardening />
+      </EnhancerBoundary>
+      <EnhancerBoundary name="QuoteFlowWizard">
+        <QuoteFlowWizard />
       </EnhancerBoundary>
       <EnhancerBoundary name="FloatingEventCart">
         <FloatingEventCart />
