@@ -31,7 +31,7 @@ function hasValue(node) {
 function focusNode(node) {
   if (!node) return;
   node.scrollIntoView?.({ behavior: "smooth", block: "center" });
-  setTimeout(() => node.focus?.({ preventScroll: true }), 250);
+  window.setTimeout(() => node.focus?.({ preventScroll: true }), 220);
 }
 
 function button(pattern) {
@@ -80,16 +80,10 @@ function validate(step) {
       return ["Esa fecha ya no está disponible. Selecciona otra fecha.", document.querySelector(".java-calendar-card")];
     }
     if (document.body.dataset.javaStartChosen !== "1") {
-      return [
-        "Selecciona primero la hora de inicio.",
-        document.querySelector(".java-time-tabs button:first-child"),
-      ];
+      return ["Selecciona primero la hora de inicio.", document.querySelector(".java-time-tabs button:first-child")];
     }
     if (document.body.dataset.javaEndChosen !== "1") {
-      return [
-        "Ahora selecciona la hora de término.",
-        document.querySelector(".java-time-tabs button:nth-child(2)"),
-      ];
+      return ["Ahora selecciona la hora de término.", document.querySelector(".java-time-tabs button:nth-child(2)")];
     }
   }
 
@@ -104,10 +98,7 @@ function validate(step) {
       if (!hasValue(node)) return [message, node];
     }
     if (!pinReady()) {
-      return [
-        "Coloca el pin en la ubicación exacta del evento.",
-        document.querySelector(".java-location-picker"),
-      ];
+      return ["Coloca el pin en la ubicación exacta del evento.", document.querySelector(".java-location-picker")];
     }
   }
 
@@ -122,15 +113,14 @@ function validate(step) {
       const node = control(label);
       if (!hasValue(node)) return [message, node];
     }
+
     const setup = document.querySelector("[data-java-setup-select]");
     if (!hasValue(setup)) return ["Selecciona el horario de montaje.", setup];
+
     const measures = document.querySelectorAll(".java-event-measurements input[type='number']");
-    if (!hasValue(measures?.[0])) {
-      return ["Indica el punto más angosto del recorrido.", measures?.[0]];
-    }
-    if (!hasValue(measures?.[1])) {
-      return ["Indica la distancia a la conexión eléctrica.", measures?.[1]];
-    }
+    if (!hasValue(measures?.[0])) return ["Indica el punto más angosto del recorrido.", measures?.[0]];
+    if (!hasValue(measures?.[1])) return ["Indica la distancia a la conexión eléctrica.", measures?.[1]];
+
     const accepted = document.querySelector(".java-event-access-check input[type='checkbox']");
     if (!accepted?.checked) {
       return ["Confirma que el lugar cumple con el espacio y acceso mínimos.", accepted];
@@ -138,10 +128,7 @@ function validate(step) {
   }
 
   if (step === 4 && !quoteReady()) {
-    return [
-      "Calcula el precio del evento antes de continuar.",
-      button(/ver precio de mi evento|calcular precio del evento/i),
-    ];
+    return ["Calcula el precio del evento antes de continuar.", button(/ver precio de mi evento|calcular precio del evento/i)];
   }
 
   if (step === 5) {
@@ -154,9 +141,7 @@ function validate(step) {
       if (!hasValue(node)) return [message, node];
     }
     const terms = termsCheckbox();
-    if (terms && !terms.checked) {
-      return ["Acepta las condiciones del servicio para continuar.", terms];
-    }
+    if (terms && !terms.checked) return ["Acepta las condiciones del servicio para continuar.", terms];
   }
 
   return null;
@@ -169,13 +154,16 @@ function applyStepVisibility(formSection, activeStep) {
       child.style.display = "none";
       continue;
     }
+
     const kicker = child.querySelector?.(".section-kicker")?.textContent?.trim() || "";
     const match = kicker.match(/^(\d)\s*·/);
     if (match) current = Number(match[1]);
+
     if (child.classList.contains("status")) {
       child.style.display = "";
       continue;
     }
+
     child.style.display = current === activeStep ? "" : "none";
   }
 }
@@ -206,18 +194,8 @@ function targetForError(text) {
   if (/montaje/i.test(text)) return document.querySelector("[data-java-setup-select]");
   if (/condiciones/i.test(text)) return termsCheckbox();
   if (/fecha|disponib/i.test(text)) return document.querySelector(".java-calendar-card");
-  if (/pin|ubicación exacta|ubicacion exacta/i.test(text)) {
-    return document.querySelector(".java-location-picker");
-  }
+  if (/pin|ubicación exacta|ubicacion exacta/i.test(text)) return document.querySelector(".java-location-picker");
   return null;
-}
-
-function syncLegacyAvailabilityState() {
-  const verifyButton = button(/verificar disponibilidad|revisando fecha/i);
-  if (!verifyButton || verifyButton.disabled) return;
-  try {
-    verifyButton.click();
-  } catch {}
 }
 
 export default function QuoteFlowWizard() {
@@ -236,7 +214,7 @@ export default function QuoteFlowWizard() {
     const [text, target] = result;
     setMessage(text);
     clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setMessage(""), 4200);
+    timerRef.current = window.setTimeout(() => setMessage(""), 4200);
     focusNode(target);
     return true;
   }
@@ -244,6 +222,7 @@ export default function QuoteFlowWizard() {
   async function verifyAvailabilityAndContinue() {
     const city = control("Ciudad del evento");
     const eventDate = selectedEventDate();
+
     if (!city?.value || !eventDate) {
       alertUser(["Selecciona ciudad y fecha antes de continuar.", document.querySelector(".java-calendar-card")]);
       return;
@@ -277,7 +256,6 @@ export default function QuoteFlowWizard() {
       }
 
       document.body.dataset.javaAvailabilityDate = eventDate;
-      syncLegacyAvailabilityState();
       window.dispatchEvent(
         new CustomEvent("java:toast", {
           detail: { text: data.message || "Java Coffee Cart disponible para esta fecha.", tone: "success" },
@@ -308,29 +286,22 @@ export default function QuoteFlowWizard() {
 
   useEffect(() => {
     if (pathname !== "/") return;
-    const panel = document.querySelector(".java-quote-wizard-panel");
-    if (!panel || !open) return;
-    const timer = setTimeout(() => panel.scrollTo({ top: 0, behavior: "smooth" }), 40);
-    return () => clearTimeout(timer);
-  }, [pathname, step, open]);
 
-  useEffect(() => {
-    if (pathname !== "/") return;
-    let panel = null;
-    let pageGrid = null;
-    let formSection = null;
-    let progressMount = null;
-    let navMount = null;
-    let backdrop = null;
+    let observer = null;
+    let cancelled = false;
+    let createdHeader = null;
+    let createdFooter = null;
+    let createdBackdrop = null;
 
-    function sync() {
-      pageGrid = document.querySelector("main.app-shell .page-grid");
-      panel = pageGrid?.querySelector("section.panel");
-      formSection = panel?.querySelector(".form-section");
-      if (!pageGrid || !panel || !formSection) return;
+    const setup = () => {
+      if (cancelled) return false;
+
+      const pageGrid = document.querySelector("main.app-shell .page-grid");
+      const panel = pageGrid?.querySelector("section.panel");
+      const formSection = panel?.querySelector(".form-section");
+      if (!pageGrid || !panel || !formSection) return false;
 
       panel.classList.add("java-quote-wizard-panel");
-      document.body.classList.toggle("java-quote-wizard-open", open);
       fixServiceCopy();
 
       const city = control("Ciudad del evento");
@@ -339,50 +310,78 @@ export default function QuoteFlowWizard() {
         : null;
       other?.remove();
 
-      if (!progressMount?.isConnected) {
+      let progressMount = panel.querySelector(":scope > .java-quote-wizard-progress-mount");
+      if (!progressMount) {
         progressMount = document.createElement("div");
         progressMount.className = "java-quote-wizard-progress-mount";
         panel.insertBefore(progressMount, panel.firstChild);
-        setHeaderMount(progressMount);
+        createdHeader = progressMount;
       }
 
-      if (!navMount?.isConnected) {
+      let navMount = panel.querySelector(":scope > .java-quote-wizard-footer-mount");
+      if (!navMount) {
         navMount = document.createElement("div");
         navMount.className = "java-quote-wizard-footer-mount";
         panel.appendChild(navMount);
-        setFooterMount(navMount);
+        createdFooter = navMount;
       }
 
-      if (!backdrop?.isConnected) {
+      let backdrop = document.querySelector(".java-quote-wizard-backdrop");
+      if (!backdrop) {
         backdrop = document.createElement("div");
         backdrop.className = "java-quote-wizard-backdrop";
         document.body.appendChild(backdrop);
+        createdBackdrop = backdrop;
       }
 
-      pageGrid.style.display = open ? "" : "none";
-      panel.style.display = open ? "" : "none";
-      backdrop.style.display = open ? "" : "none";
-      applyStepVisibility(formSection, step);
+      setHeaderMount(progressMount);
+      setFooterMount(navMount);
+      return true;
+    };
+
+    if (!setup()) {
+      observer = new MutationObserver(() => {
+        if (setup()) observer?.disconnect();
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
     }
 
-    const start = setTimeout(sync, 60);
-    const observer = new MutationObserver(() => {
-      if (!document.querySelector(".java-quote-wizard-progress-mount")) sync();
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-
     return () => {
-      clearTimeout(start);
+      cancelled = true;
+      observer?.disconnect();
       clearTimeout(timerRef.current);
-      observer.disconnect();
-      pageGrid?.style.removeProperty("display");
-      panel?.classList.remove("java-quote-wizard-panel");
-      panel?.style.removeProperty("display");
-      progressMount?.remove();
-      navMount?.remove();
-      backdrop?.remove();
+      createdHeader?.remove();
+      createdFooter?.remove();
+      createdBackdrop?.remove();
       document.body.classList.remove("java-quote-wizard-open");
     };
+  }, [pathname]);
+
+  useEffect(() => {
+    if (pathname !== "/") return;
+
+    const pageGrid = document.querySelector("main.app-shell .page-grid");
+    const panel = pageGrid?.querySelector("section.panel");
+    const formSection = panel?.querySelector(".form-section");
+    const backdrop = document.querySelector(".java-quote-wizard-backdrop");
+    if (!pageGrid || !panel || !formSection) return;
+
+    document.body.classList.toggle("java-quote-wizard-open", open);
+    pageGrid.style.display = open ? "" : "none";
+    panel.style.display = open ? "" : "none";
+    if (backdrop) backdrop.style.display = open ? "" : "none";
+
+    if (open) {
+      applyStepVisibility(formSection, step);
+      panel.scrollTo({ top: 0, behavior: "auto" });
+    }
+
+    const frame = requestAnimationFrame(() => {
+      window.dispatchEvent(new CustomEvent("java:wizard-step", { detail: { step, open } }));
+      if (open && step === 1) window.dispatchEvent(new Event("java:calendar-refresh"));
+    });
+
+    return () => cancelAnimationFrame(frame);
   }, [pathname, step, open]);
 
   useEffect(() => {
@@ -393,18 +392,18 @@ export default function QuoteFlowWizard() {
       if (!text) return;
       setMessage(text);
       clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => setMessage(""), 4200);
+      timerRef.current = window.setTimeout(() => setMessage(""), 4200);
       focusNode(targetForError(text));
     }
 
-    const interval = setInterval(() => {
+    const interval = window.setInterval(() => {
       const error = document.querySelector("main.app-shell .status.error");
       const text = String(error?.textContent || "").trim();
       if (!text || text === lastErrorRef.current) return;
       lastErrorRef.current = text;
       setMessage(text);
       focusNode(targetForError(text));
-    }, 650);
+    }, 900);
 
     window.addEventListener("java:validation", onValidation);
     return () => {
@@ -414,6 +413,7 @@ export default function QuoteFlowWizard() {
   }, [pathname]);
 
   if (pathname !== "/") return null;
+
   const current = STEPS[step - 1];
   const progress = ((step - 1) / (STEPS.length - 1)) * 100;
 
@@ -431,17 +431,17 @@ export default function QuoteFlowWizard() {
                 ×
               </button>
             </div>
+
             <div className="java-quote-wizard-progress-track">
               <span style={{ width: `${progress}%` }} />
             </div>
+
             <div className="java-quote-wizard-steps">
               {STEPS.map((item) => (
                 <button
                   type="button"
                   key={item.id}
-                  className={`${item.id === step ? "active" : ""} ${
-                    item.id < step ? "done" : ""
-                  }`}
+                  className={`${item.id === step ? "active" : ""} ${item.id < step ? "done" : ""}`}
                   onClick={() => item.id < step && setStep(item.id)}
                 >
                   <span>{item.id}</span>
@@ -449,6 +449,7 @@ export default function QuoteFlowWizard() {
                 </button>
               ))}
             </div>
+
             {message && <div className="java-quote-wizard-alert">{message}</div>}
           </div>,
           headerMount
@@ -494,11 +495,7 @@ export default function QuoteFlowWizard() {
       {!open &&
         typeof document !== "undefined" &&
         createPortal(
-          <button
-            type="button"
-            className="java-quote-wizard-launch"
-            onClick={() => setOpen(true)}
-          >
+          <button type="button" className="java-quote-wizard-launch" onClick={() => setOpen(true)}>
             Cotizar mi evento →
           </button>,
           document.body
