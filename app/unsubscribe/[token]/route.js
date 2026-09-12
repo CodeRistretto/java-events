@@ -13,25 +13,57 @@ function page(title, message) {
 export async function GET(_request, { params }) {
   const { token } = await params;
 
-  const { data: booking, error } = await supabaseAdmin
+  const bookingResult = await supabaseAdmin
     .from("bookings")
     .select("id")
     .eq("email_unsubscribe_token", token)
     .maybeSingle();
 
-  if (error || !booking) {
+  if (bookingResult.error) {
+    return page(
+      "No pudimos actualizar tu preferencia",
+      "Inténtalo nuevamente más tarde o comunícate con Java Times Caffé."
+    );
+  }
+
+  if (bookingResult.data) {
+    const { error } = await supabaseAdmin
+      .from("bookings")
+      .update({ marketing_consent: false })
+      .eq("id", bookingResult.data.id);
+
+    if (error) {
+      return page(
+        "No pudimos actualizar tu preferencia",
+        "Inténtalo nuevamente más tarde o comunícate con Java Times Caffé."
+      );
+    }
+
+    return page(
+      "Seguimiento cancelado",
+      "Ya no recibirás los correos mensuales de seguimiento de esta cotización. Los correos necesarios para una reserva o pago activo pueden seguir enviándose cuando correspondan."
+    );
+  }
+
+  const leadResult = await supabaseAdmin
+    .from("event_leads")
+    .select("id")
+    .eq("email_unsubscribe_token", token)
+    .maybeSingle();
+
+  if (leadResult.error || !leadResult.data) {
     return page(
       "No encontramos esta preferencia",
       "El enlace puede haber expirado o no corresponde a una solicitud de Java Events."
     );
   }
 
-  const { error: updateError } = await supabaseAdmin
-    .from("bookings")
+  const { error: leadUpdateError } = await supabaseAdmin
+    .from("event_leads")
     .update({ marketing_consent: false })
-    .eq("id", booking.id);
+    .eq("id", leadResult.data.id);
 
-  if (updateError) {
+  if (leadUpdateError) {
     return page(
       "No pudimos actualizar tu preferencia",
       "Inténtalo nuevamente más tarde o comunícate con Java Times Caffé."
@@ -40,6 +72,6 @@ export async function GET(_request, { params }) {
 
   return page(
     "Seguimiento cancelado",
-    "Ya no recibirás los correos mensuales de seguimiento de esta cotización. Los correos necesarios para una reserva o pago activo pueden seguir enviándose cuando correspondan."
+    "Ya no recibirás los correos mensuales de seguimiento de esta cotización."
   );
 }
