@@ -7,18 +7,24 @@ import {
 export const runtime = "nodejs";
 
 const ALLOWED_EVENTS = new Set(["JavaQuoteStarted"]);
+const PAID_EVENT_SEED = "java-coffee-cart-paid-v1";
 
 export async function POST(request) {
   try {
     const body = await request.json();
     const eventName = String(body.eventName || "");
+    const isPaidEventSeed =
+      eventName === "JavaCoffeeCartDepositPaid" &&
+      body.diagnosticSeed === PAID_EVENT_SEED;
 
-    if (!ALLOWED_EVENTS.has(eventName)) {
+    if (!ALLOWED_EVENTS.has(eventName) && !isPaidEventSeed) {
       return Response.json({ success: false, error: "Unsupported event" }, { status: 400 });
     }
 
     const attribution = normalizeAttribution(body.attribution);
-    const eventId = String(body.eventId || "").slice(0, 200);
+    const eventId = isPaidEventSeed
+      ? "java-deposit-catalog-seed-v1"
+      : String(body.eventId || "").slice(0, 200);
 
     if (!eventId || !attribution.client_session_id) {
       return Response.json({ success: false, error: "Missing event identity" }, { status: 400 });
@@ -31,11 +37,19 @@ export async function POST(request) {
       attribution,
       context: requestContext(request),
       customer: { externalId: attribution.client_session_id },
-      customData: {
-        content_name: "Java Coffee Cart",
-        content_category: "Event service",
-        currency: "MXN",
-      },
+      customData: isPaidEventSeed
+        ? {
+            content_name: "Java Coffee Cart — Activación técnica",
+            content_category: "Event deposit",
+            value: 0,
+            currency: "MXN",
+            diagnostic: true,
+          }
+        : {
+            content_name: "Java Coffee Cart",
+            content_category: "Event service",
+            currency: "MXN",
+          },
     });
 
     return Response.json({ success: true, delivery });
@@ -44,4 +58,3 @@ export async function POST(request) {
     return Response.json({ success: false }, { status: 202 });
   }
 }
-
