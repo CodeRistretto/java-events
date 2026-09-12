@@ -10,7 +10,8 @@ export default function EmbedAutoOpen() {
     if (pathname !== "/") return;
 
     const params = new URLSearchParams(window.location.search);
-    if (params.get("embed") !== "1") return;
+    const framed = window.self !== window.top;
+    if (params.get("embed") !== "1" && !framed) return;
 
     const shouldOpen = params.get("open") !== "0";
     document.documentElement.classList.add("java-events-embedded");
@@ -30,6 +31,12 @@ export default function EmbedAutoOpen() {
       body.java-events-embedded .java-quote-wizard-launch {
         opacity: 0 !important;
         pointer-events: none !important;
+      }
+
+      body.java-events-embedded main.app-shell > .hero,
+      body.java-events-embedded .java-events-landing-mount,
+      body.java-events-embedded main.app-shell > footer {
+        display: none !important;
       }
 
       body.java-events-embedded .java-quote-wizard-topline > button {
