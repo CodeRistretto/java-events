@@ -30,6 +30,8 @@ export async function POST(request) {
     const customerName = String(body.customerName || "").trim();
     const email = String(body.email || "").trim().toLowerCase();
     const phone = normalizeMexicoPhone(body.phone);
+    const latitude = Number(body.latitude);
+    const longitude = Number(body.longitude);
 
     if (!customerName) throw new Error("Escribe el nombre completo.");
     if (!validEmail(email)) throw new Error("Ingresa un correo electrónico válido.");
@@ -38,6 +40,18 @@ export async function POST(request) {
     if (!body.startTime) throw new Error("Selecciona la hora de inicio.");
     if (!body.endTime) throw new Error("Selecciona la hora de término.");
     if (!body.serviceAreaId) throw new Error("Selecciona una ciudad.");
+    if (
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      throw new Error(
+        "Selecciona la ubicación exacta del evento colocando el pin en el mapa."
+      );
+    }
     if (!body.venueName) throw new Error("Ingresa el nombre del lugar.");
     if (!body.eventAddress) throw new Error("Ingresa la calle y número.");
     if (!body.neighborhood) throw new Error("Ingresa la colonia.");
@@ -71,8 +85,8 @@ export async function POST(request) {
     await validateServiceAreaAddress({
       serviceAreaId: body.serviceAreaId,
       postalCode: body.postalCode,
-      latitude: body.latitude ?? null,
-      longitude: body.longitude ?? null,
+      latitude,
+      longitude,
     });
 
     const quote = await calculateEventQuote({
@@ -124,8 +138,8 @@ export async function POST(request) {
           venue_name: body.venueName,
           neighborhood: body.neighborhood,
           postal_code: body.postalCode,
-          latitude: body.latitude ?? null,
-          longitude: body.longitude ?? null,
+          latitude,
+          longitude,
           event_date: body.eventDate,
           start_time: body.startTime,
           duration_hours: Math.max(
