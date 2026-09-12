@@ -1,8 +1,12 @@
+body:not(.java-quote-wizard-open) main.app-shell .page-grid {
+  display: none;
+}
+
 .java-quote-wizard-backdrop {
   position: fixed;
   inset: 0;
   z-index: 8000;
-  background: rgba(18, 18, 20, 0.42);
+  background: rgba(18, 18, 20, 0.34);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
@@ -10,16 +14,29 @@
 .java-quote-wizard-panel {
   position: fixed !important;
   z-index: 8010 !important;
-  top: 4vh;
+  top: 2vh;
   left: 50%;
   transform: translateX(-50%);
-  width: min(1040px, calc(100vw - 48px));
-  max-height: 92vh;
+  width: min(1120px, calc(100vw - 40px));
+  max-height: 96vh;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  border: 1px solid rgba(29,29,31,.09) !important;
   border-radius: 30px !important;
-  box-shadow: 0 28px 90px rgba(0,0,0,.22) !important;
+  box-shadow: 0 30px 90px rgba(0,0,0,.2) !important;
   background: #fff !important;
+}
+
+.java-quote-wizard-panel::-webkit-scrollbar {
+  width: 9px;
+}
+
+.java-quote-wizard-panel::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(29,29,31,.18);
+  background-clip: padding-box;
 }
 
 .java-quote-wizard-open {
@@ -33,15 +50,15 @@
 .java-quote-wizard-progress-mount {
   position: sticky;
   top: 0;
-  z-index: 20;
-  background: rgba(255,255,255,.96);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  z-index: 30;
+  background: rgba(255,255,255,.97);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
   border-bottom: 1px solid rgba(29,29,31,.08);
 }
 
 .java-quote-wizard-chrome {
-  padding: 22px 28px 18px;
+  padding: 22px 30px 18px;
 }
 
 .java-quote-wizard-topline {
@@ -59,29 +76,39 @@
 
 .java-quote-wizard-topline small {
   color: #f05a22;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 800;
   letter-spacing: .14em;
 }
 
 .java-quote-wizard-topline strong {
-  font-size: 23px;
+  color: #1d1d1f;
+  font-size: 24px;
   line-height: 1.1;
+  letter-spacing: -.025em;
 }
 
 .java-quote-wizard-topline > button {
-  width: 38px;
-  height: 38px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
   border: 0;
   border-radius: 999px;
   background: #f5f5f7;
-  cursor: pointer;
-  font-size: 22px;
   color: #555;
+  cursor: pointer;
+  font-size: 20px;
+  transition: background .16s ease, transform .16s ease;
+}
+
+.java-quote-wizard-topline > button:hover {
+  background: #ececef;
+  transform: scale(1.02);
 }
 
 .java-quote-wizard-progress-track {
-  height: 5px;
+  height: 4px;
   border-radius: 999px;
   background: #ececf0;
   overflow: hidden;
@@ -109,7 +136,7 @@
   gap: 7px;
   border: 0;
   background: transparent;
-  padding: 6px;
+  padding: 7px 5px;
   color: #9a9aa0;
   cursor: default;
 }
@@ -126,12 +153,12 @@
 .java-quote-wizard-steps button > span {
   display: grid;
   place-items: center;
-  width: 23px;
-  height: 23px;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
   background: #efeff2;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 800;
 }
 
 .java-quote-wizard-steps button.active > span,
@@ -142,77 +169,141 @@
 
 .java-quote-wizard-steps small {
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 700;
 }
 
 .java-quote-wizard-alert {
-  margin-top: 14px;
+  margin-top: 13px;
   padding: 11px 14px;
   border-radius: 12px;
   background: #fff5ef;
   border: 1px solid rgba(240,90,34,.2);
-  color: #b94a20;
-  font-size: 13px;
+  color: #a8431d;
+  font-size: 12px;
   line-height: 1.45;
 }
 
-.java-quote-wizard-nav {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 16px;
-}
-
-.java-quote-wizard-nav button {
-  min-height: 42px;
-  border-radius: 999px;
-  padding: 0 18px;
-  font: inherit;
-  font-weight: 650;
-  cursor: pointer;
-}
-
-.java-quote-wizard-nav .secondary {
-  background: #fff;
-  border: 1px solid #dedee3;
-  color: #333;
-}
-
-.java-quote-wizard-nav .secondary:disabled {
-  opacity: .35;
-  cursor: default;
-}
-
-.java-quote-wizard-nav .primary {
-  border: 0;
-  background: #f05a22;
-  color: #fff;
-  margin-left: auto;
-}
-
 .java-quote-wizard-panel .form-section {
-  padding-top: 26px !important;
-  min-height: 430px;
+  min-height: 460px;
+  padding: 34px 36px 46px !important;
 }
 
 .java-quote-wizard-panel .section-title {
   margin-top: 0 !important;
 }
 
+.java-quote-wizard-panel .form-grid {
+  gap: 18px !important;
+}
+
+.java-quote-wizard-panel .field {
+  min-width: 0;
+}
+
+.java-quote-wizard-panel .input,
+.java-quote-wizard-panel .select,
+.java-quote-wizard-panel .textarea {
+  min-height: 54px;
+  border-radius: 14px !important;
+}
+
+.java-quote-wizard-panel .textarea {
+  min-height: 120px;
+}
+
+.java-quote-wizard-footer-mount {
+  position: sticky;
+  bottom: 0;
+  z-index: 28;
+  border-top: 1px solid rgba(29,29,31,.08);
+  background: rgba(255,255,255,.97);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+}
+
+.java-quote-wizard-footer {
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 30px max(14px, env(safe-area-inset-bottom));
+}
+
+.java-quote-wizard-footer button {
+  min-height: 44px;
+  border-radius: 999px;
+  padding: 0 19px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform .16s ease, background .16s ease;
+}
+
+.java-quote-wizard-footer button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.java-quote-wizard-footer .secondary {
+  background: #fff;
+  border: 1px solid #dedee3;
+  color: #333;
+}
+
+.java-quote-wizard-footer .secondary:disabled {
+  opacity: .35;
+  cursor: default;
+}
+
+.java-quote-wizard-footer .primary {
+  border: 0;
+  background: #f05a22;
+  color: #fff;
+  box-shadow: 0 8px 22px rgba(240,90,34,.18);
+}
+
+.java-quote-wizard-footer-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  text-align: center;
+}
+
+.java-quote-wizard-footer-copy strong {
+  color: #1d1d1f;
+  font-size: 11px;
+}
+
+.java-quote-wizard-footer-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #86868b;
+  font-size: 10px;
+}
+
 .java-quote-wizard-launch {
   position: fixed;
-  z-index: 8020;
+  z-index: 1500;
   right: 24px;
   bottom: 24px;
   border: 0;
   border-radius: 999px;
   background: #f05a22;
-  color: white;
+  color: #fff;
   padding: 15px 24px;
   font: inherit;
-  font-weight: 700;
-  box-shadow: 0 12px 34px rgba(240,90,34,.28);
+  font-size: 13px;
+  font-weight: 750;
+  box-shadow: 0 14px 36px rgba(240,90,34,.28);
   cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+}
+
+.java-quote-wizard-launch:hover {
+  transform: translateY(-2px);
+  background: #df4f19;
+  box-shadow: 0 18px 40px rgba(240,90,34,.32);
 }
 
 .java-quote-wizard-open .summary-card {
@@ -229,7 +320,7 @@
 }
 
 .java-time-tabs button.java-time-locked {
-  opacity: .45;
+  opacity: .42;
   cursor: not-allowed;
 }
 
@@ -274,42 +365,96 @@ body[data-java-start-chosen="1"][data-java-end-chosen="0"] .java-datetime-summar
     width: 100vw;
     max-height: 100dvh;
     min-height: 100dvh;
+    border: 0 !important;
     border-radius: 0 !important;
   }
 
   .java-quote-wizard-chrome {
-    padding: 17px 16px 14px;
+    padding: 16px 16px 13px;
+  }
+
+  .java-quote-wizard-topline {
+    margin-bottom: 13px;
   }
 
   .java-quote-wizard-topline strong {
     font-size: 19px;
   }
 
+  .java-quote-wizard-steps {
+    gap: 2px;
+  }
+
   .java-quote-wizard-steps small {
     display: none;
   }
 
+  .java-quote-wizard-steps button {
+    padding-inline: 2px;
+  }
+
   .java-quote-wizard-panel .form-section {
-    padding: 22px 16px 120px !important;
+    min-height: calc(100dvh - 230px);
+    padding: 24px 16px 36px !important;
   }
 
-  .java-quote-wizard-nav {
-    position: sticky;
-    bottom: 0;
-    margin: 14px -16px -14px;
-    padding: 12px 16px max(12px, env(safe-area-inset-bottom));
-    background: rgba(255,255,255,.96);
-    border-top: 1px solid #ececf0;
+  .java-quote-wizard-panel .form-grid {
+    grid-template-columns: 1fr !important;
+    gap: 15px !important;
   }
 
-  .java-quote-wizard-open .java-floating-cart {
+  .java-quote-wizard-footer {
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    padding: 11px 14px max(11px, env(safe-area-inset-bottom));
+  }
+
+  .java-quote-wizard-footer-copy span {
+    display: none;
+  }
+
+  .java-quote-wizard-footer button {
+    min-height: 46px;
+    padding-inline: 16px;
+  }
+
+  .java-quote-wizard-open .java-floating-cart,
+  .java-quote-wizard-open .java-floating-cart-collapsed {
     display: none !important;
   }
 
   .java-quote-wizard-launch {
     right: 16px;
     left: 16px;
-    bottom: 16px;
+    bottom: max(16px, env(safe-area-inset-bottom));
     width: calc(100% - 32px);
+    min-height: 54px;
+  }
+}
+
+@media (max-width: 520px) {
+  .java-quote-wizard-topline small {
+    font-size: 9px;
+  }
+
+  .java-quote-wizard-topline strong {
+    font-size: 17px;
+  }
+
+  .java-quote-wizard-footer-copy {
+    display: none;
+  }
+
+  .java-quote-wizard-footer {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .java-quote-wizard-footer .secondary,
+  .java-quote-wizard-footer .primary {
+    width: 100%;
+  }
+
+  .java-quote-wizard-footer .primary:last-child {
+    grid-column: 2;
   }
 }
