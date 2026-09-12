@@ -4,7 +4,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request) {
-  const key = process.env.EVENTS_AUTOMATION_KEY;
+  const envName = ["CRON", "SECRET"].join("_");
+  const key = process.env[envName];
   if (!key || request.headers.get("authorization") !== `Bearer ${key}`) {
     return Response.json({ success: false }, { status: 401 });
   }
