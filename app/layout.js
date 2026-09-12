@@ -2,6 +2,8 @@ import { Syne } from "next/font/google";
 import "./globals.css";
 import "./apple-light.css";
 import "./event-interactions.css";
+import "./location-pin.css";
+import LocationPinEnhancer from "./LocationPinEnhancer";
 
 const syne = Syne({
   subsets: ["latin"],
@@ -18,7 +20,10 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="es" className={syne.variable}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <LocationPinEnhancer />
+      </body>
     </html>
   );
 }
