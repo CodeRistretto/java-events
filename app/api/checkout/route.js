@@ -5,6 +5,10 @@ import { normalizeMexicoPhone } from "@/lib/phone";
 
 export const runtime = "nodejs";
 
+const JAVA_EVENTS_VARIANT_ID =
+  process.env.SHOPIFY_EVENT_VARIANT_ID ||
+  "gid://shopify/ProductVariant/46649709789380";
+
 function money(value) {
   return Number(value || 0).toFixed(2);
 }
@@ -55,21 +59,13 @@ function buildLineItem({
   expectedVatCents,
 }) {
   return {
-    title: `Anticipo Java Coffee Cart${
-      booking.event_order_number
-        ? ` · ${booking.event_order_number}`
-        : ""
-    }`,
-
+    variantId: JAVA_EVENTS_VARIANT_ID,
     quantity: 1,
 
-    originalUnitPriceWithCurrency: {
+    priceOverride: {
       amount: centsToMoney(priceCents),
       currencyCode: "MXN",
     },
-
-    requiresShipping: false,
-    taxable: true,
 
     customAttributes: [
       {
