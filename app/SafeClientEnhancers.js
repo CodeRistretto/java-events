@@ -12,6 +12,8 @@ import QuoteFlowWizard from "./QuoteFlowWizard";
 import StatusToastEnhancer from "./StatusToastEnhancer";
 import ConfirmationPaymentCTA from "./ConfirmationPaymentCTA";
 import FloatingEventCart from "./FloatingEventCart";
+import PublicCopyEnhancer from "./PublicCopyEnhancer";
+import LoadingExperience from "./LoadingExperience";
 
 class EnhancerBoundary extends React.Component {
   constructor(props) {
@@ -36,6 +38,12 @@ class EnhancerBoundary extends React.Component {
 export default function SafeClientEnhancers() {
   return (
     <>
+      <EnhancerBoundary name="LoadingExperience">
+        <LoadingExperience />
+      </EnhancerBoundary>
+      <EnhancerBoundary name="PublicCopyEnhancer">
+        <PublicCopyEnhancer />
+      </EnhancerBoundary>
       <EnhancerBoundary name="LocationPinEnhancer">
         <LocationPinEnhancer />
       </EnhancerBoundary>
