@@ -6,6 +6,20 @@ import { usePathname } from "next/navigation";
 
 const SLOT_START_MINUTES = 6 * 60;
 const SLOT_STEP_MINUTES = 30;
+const SPANISH_MONTHS = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+];
 
 function pad(value) {
   return String(value).padStart(2, "0");
@@ -59,6 +73,85 @@ function scheduleSignature(start, end) {
   return start && end ? `${start}|${end}` : null;
 }
 
+function normalizeText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function mexicoToday() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return new Date(Number(map.year), Number(map.month) - 1, Number(map.day), 12, 0, 0);
+}
+
+function visibleCalendarMonth() {
+  const text = normalizeText(
+    document.querySelector(".java-calendar-toolbar strong")?.textContent
+  );
+  const yearMatch = text.match(/(20\d{2})/);
+  if (!yearMatch) return null;
+  const monthIndex = SPANISH_MONTHS.findIndex((month) => text.includes(month));
+  if (monthIndex < 0) return null;
+  return new Date(Number(yearMatch[1]), monthIndex, 1, 12, 0, 0);
+}
+
+function enforceMinimumLeadTime(minimumLeadDays) {
+  const month = visibleCalendarMonth();
+  const buttons = Array.from(document.querySelectorAll(".java-calendar-days button"));
+  if (!month || !buttons.length) return;
+
+  const earliest = mexicoToday();
+  earliest.setDate(earliest.getDate() + Math.max(0, Number(minimumLeadDays || 0)));
+
+  const first = new Date(month);
+  const offset = (first.getDay() + 6) % 7;
+  const gridStart = new Date(first);
+  gridStart.setDate(first.getDate() - offset);
+
+  buttons.forEach((button, index) => {
+    const date = new Date(gridStart);
+    date.setDate(gridStart.getDate() + index);
+    const blockedByLead = date < earliest;
+
+    if (blockedByLead) {
+      button.disabled = true;
+      button.dataset.javaLeadDisabled = "1";
+      button.title = `Reserva con mínimo ${minimumLeadDays} días de anticipación`;
+    } else if (button.dataset.javaLeadDisabled === "1") {
+      button.disabled = false;
+      delete button.dataset.javaLeadDisabled;
+      button.removeAttribute("title");
+    }
+  });
+
+  const card = document.querySelector(".java-calendar-card");
+  if (!card) return;
+  let note = card.querySelector(".java-lead-time-note");
+  if (!note) {
+    note = document.createElement("div");
+    note.className = "java-lead-time-note";
+    note.style.cssText =
+      "margin:0 0 12px;padding:9px 11px;border-radius:11px;background:#fff7f2;color:#a94820;font-size:12px;line-height:1.4;border:1px solid rgba(240,90,34,.14)";
+    const toolbar = card.querySelector(".java-calendar-toolbar");
+    toolbar?.insertAdjacentElement("afterend", note);
+  }
+
+  const firstAvailable = new Intl.DateTimeFormat("es-MX", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(earliest);
+  const nextText = `Reservas con mínimo ${minimumLeadDays} días de anticipación. Primera fecha posible: ${firstAvailable}.`;
+  if (note.textContent !== nextText) note.textContent = nextText;
+}
+
 function hideManualExtraHourCard() {
   const titles = Array.from(document.querySelectorAll(".check-title"));
   for (const title of titles) {
@@ -88,13 +181,24 @@ function setSequenceState(startChosen, endChosen) {
   }
 }
 
+function forceStartTab() {
+  const tabs = Array.from(document.querySelectorAll(".java-time-tabs button"));
+  const startTab = tabs[0];
+  if (startTab && !startTab.classList.contains("active")) startTab.click();
+}
+
 function notify(message) {
   window.dispatchEvent(new CustomEvent("java:validation", { detail: { message } }));
 }
 
 export default function EventDurationGuard() {
   const pathname = usePathname();
-  const [config, setConfig] = useState({ includedHours: 2, extraHourCents: 0, vatBps: 1600 });
+  const [config, setConfig] = useState({
+    includedHours: 2,
+    extraHourCents: 0,
+    vatBps: 1600,
+    minimumLeadDays: 7,
+  });
   const [pending, setPending] = useState(null);
 
   const bypassRef = useRef(false);
@@ -115,11 +219,14 @@ export default function EventDurationGuard() {
       .then((data) => {
         if (cancelled || !data?.success) return;
         const extra = (data.addOns || []).find((item) => item.code === "ADDITIONAL_HOUR");
-        setConfig({
+        const next = {
           includedHours: Number(data.settings?.standard_duration_hours || 2),
           extraHourCents: Number(extra?.unit_price_cents || 0),
           vatBps: Number(data.settings?.vat_bps || 0),
-        });
+          minimumLeadDays: Number(data.settings?.minimum_lead_days ?? 7),
+        };
+        setConfig(next);
+        setTimeout(() => enforceMinimumLeadTime(next.minimumLeadDays), 0);
       })
       .catch(() => {});
 
@@ -127,11 +234,13 @@ export default function EventDurationGuard() {
       syncTimesFromDom(startRef, endRef);
       hideManualExtraHourCard();
       setSequenceState(startChosenRef.current, endChosenRef.current);
+      enforceMinimumLeadTime(7);
     }, 120);
 
     const observer = new MutationObserver(() => {
       hideManualExtraHourCard();
       setSequenceState(startChosenRef.current, endChosenRef.current);
+      enforceMinimumLeadTime(7);
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
@@ -146,14 +255,25 @@ export default function EventDurationGuard() {
 
   useEffect(() => {
     if (pathname !== "/") return;
+    enforceMinimumLeadTime(config.minimumLeadDays);
+  }, [pathname, config.minimumLeadDays]);
+
+  useEffect(() => {
+    if (pathname !== "/") return;
 
     function handleCalendarClick(event) {
       const dateButton = event.target.closest?.(".java-calendar-days button");
       if (!dateButton || dateButton.disabled) return;
+
       startChosenRef.current = false;
       endChosenRef.current = false;
       lastQuotedSignatureRef.current = null;
       setSequenceState(false, false);
+
+      setTimeout(() => {
+        forceStartTab();
+        enforceMinimumLeadTime(config.minimumLeadDays);
+      }, 0);
     }
 
     function handleTabClick(event) {
@@ -189,7 +309,9 @@ export default function EventDurationGuard() {
         if (selectedMinutes + config.includedHours * 60 > 23 * 60 + 30) {
           event.preventDefault();
           event.stopPropagation();
-          notify(`La hora de inicio debe permitir al menos ${config.includedHours} horas de servicio antes de las 11:30 p.m.`);
+          notify(
+            `La hora de inicio debe permitir al menos ${config.includedHours} horas de servicio antes de las 11:30 p.m.`
+          );
           return;
         }
 
@@ -198,20 +320,6 @@ export default function EventDurationGuard() {
         startRef.current = selectedTime;
         lastQuotedSignatureRef.current = null;
         setSequenceState(true, false);
-
-        setTimeout(() => {
-          const targetMinutes = selectedMinutes + config.includedHours * 60;
-          const index = Math.round((targetMinutes - SLOT_START_MINUTES) / SLOT_STEP_MINUTES);
-          const buttons = Array.from(document.querySelectorAll(".java-time-slots button"));
-          const target = buttons[index];
-          if (target && !target.disabled) {
-            bypassRef.current = true;
-            target.click();
-            endRef.current = timeFromMinutes(targetMinutes);
-            endChosenRef.current = false;
-            setSequenceState(true, false);
-          }
-        }, 30);
         return;
       }
 
@@ -220,6 +328,7 @@ export default function EventDurationGuard() {
         event.preventDefault();
         event.stopPropagation();
         notify("Primero selecciona la hora de inicio.");
+        setTimeout(forceStartTab, 0);
         return;
       }
 
@@ -228,7 +337,10 @@ export default function EventDurationGuard() {
       if (startMinutes === null || selectedMinutes <= startMinutes) return;
 
       const duration = (selectedMinutes - startMinutes) / 60;
-      const extraHours = Math.max(0, Math.ceil(duration - config.includedHours - 0.000001));
+      const extraHours = Math.max(
+        0,
+        Math.ceil(duration - config.includedHours - 0.000001)
+      );
 
       if (extraHours <= 0) {
         endChosenRef.current = true;
@@ -242,7 +354,13 @@ export default function EventDurationGuard() {
       event.stopPropagation();
 
       if (!config.extraHourCents) {
-        setPending({ unavailable: true, button: slotButton, selectedTime, duration, extraHours });
+        setPending({
+          unavailable: true,
+          button: slotButton,
+          selectedTime,
+          duration,
+          extraHours,
+        });
         return;
       }
 
@@ -281,7 +399,10 @@ export default function EventDurationGuard() {
       if (url.includes("/api/quote") && method === "POST") {
         if (!startChosenRef.current || !endChosenRef.current) {
           return new Response(
-            JSON.stringify({ success: false, error: "Selecciona primero la hora de inicio y después la hora de término." }),
+            JSON.stringify({
+              success: false,
+              error: "Selecciona primero la hora de inicio y después la hora de término.",
+            }),
             { status: 400, headers: { "Content-Type": "application/json" } }
           );
         }
@@ -313,13 +434,24 @@ export default function EventDurationGuard() {
         const current = scheduleSignature(startRef.current, endRef.current);
         if (!startChosenRef.current || !endChosenRef.current) {
           return new Response(
-            JSON.stringify({ success: false, error: "Selecciona primero la hora de inicio y después la hora de término." }),
+            JSON.stringify({
+              success: false,
+              error: "Selecciona primero la hora de inicio y después la hora de término.",
+            }),
             { status: 400, headers: { "Content-Type": "application/json" } }
           );
         }
-        if (!current || !lastQuotedSignatureRef.current || current !== lastQuotedSignatureRef.current) {
+        if (
+          !current ||
+          !lastQuotedSignatureRef.current ||
+          current !== lastQuotedSignatureRef.current
+        ) {
           return new Response(
-            JSON.stringify({ success: false, error: "El horario cambió después de la cotización. Vuelve a calcular el precio antes de apartar la fecha." }),
+            JSON.stringify({
+              success: false,
+              error:
+                "El horario cambió después de la cotización. Vuelve a calcular el precio antes de apartar la fecha.",
+            }),
             { status: 409, headers: { "Content-Type": "application/json" } }
           );
         }
@@ -353,28 +485,64 @@ export default function EventDurationGuard() {
 
   return createPortal(
     <div className="java-hours-modal-backdrop" role="presentation" onMouseDown={close}>
-      <div className="java-hours-modal" role="dialog" aria-modal="true" aria-labelledby="java-hours-title" onMouseDown={(event) => event.stopPropagation()}>
+      <div
+        className="java-hours-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="java-hours-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         <div className="java-hours-icon">＋</div>
         <div className="java-hours-kicker">TIEMPO ADICIONAL</div>
-        <h2 id="java-hours-title">{pending.unavailable ? "Este horario necesita una tarifa adicional" : `${pending.duration} horas de servicio`}</h2>
+        <h2 id="java-hours-title">
+          {pending.unavailable
+            ? "Este horario necesita una tarifa adicional"
+            : `${pending.duration} horas de servicio`}
+        </h2>
 
         {pending.unavailable ? (
-          <p>El servicio base incluye {config.includedHours} horas. No hay una tarifa activa para horas adicionales, por lo que no podemos confirmar este horario todavía.</p>
+          <p>
+            El servicio base incluye {config.includedHours} horas. No hay una tarifa
+            activa para horas adicionales, por lo que no podemos confirmar este horario
+            todavía.
+          </p>
         ) : (
           <>
-            <p>Tu servicio incluye <strong>{config.includedHours} horas</strong>. El horario elegido requiere <strong>{pending.extraHours} hora(s) adicional(es)</strong>. Cada hora adicional o fracción se cobra aparte.</p>
+            <p>
+              Tu servicio incluye <strong>{config.includedHours} horas</strong>. El horario
+              elegido requiere <strong>{pending.extraHours} hora(s) adicional(es)</strong>.
+              Cada hora adicional o fracción se cobra aparte.
+            </p>
             <div className="java-hours-price-card">
-              <div><span>Hora adicional</span><strong>{moneyFromCents(config.extraHourCents)} + IVA</strong></div>
-              <div><span>{pending.extraHours} hora(s) adicional(es)</span><strong>{moneyFromCents(pending.subtotalCents)} + IVA</strong></div>
-              <div className="total"><span>Total adicional con IVA</span><strong>{moneyFromCents(pending.totalCents)}</strong></div>
+              <div>
+                <span>Hora adicional</span>
+                <strong>{moneyFromCents(config.extraHourCents)} + IVA</strong>
+              </div>
+              <div>
+                <span>{pending.extraHours} hora(s) adicional(es)</span>
+                <strong>{moneyFromCents(pending.subtotalCents)} + IVA</strong>
+              </div>
+              <div className="total">
+                <span>Total adicional con IVA</span>
+                <strong>{moneyFromCents(pending.totalCents)}</strong>
+              </div>
             </div>
-            <div className="java-hours-notice">Al aceptar, este horario quedará seleccionado. Antes de apartar la fecha el total será validado nuevamente.</div>
+            <div className="java-hours-notice">
+              Al aceptar, este horario quedará seleccionado. Antes de apartar la fecha el
+              total será validado nuevamente.
+            </div>
           </>
         )}
 
         <div className="java-hours-actions">
-          <button type="button" className="secondary" onClick={close}>{pending.unavailable ? "Cerrar" : `No, máximo ${config.includedHours} horas`}</button>
-          {!pending.unavailable && <button type="button" className="primary" onClick={accept}>Sí, quiero más horas · {moneyFromCents(pending.totalCents)}</button>}
+          <button type="button" className="secondary" onClick={close}>
+            {pending.unavailable ? "Cerrar" : `No, máximo ${config.includedHours} horas`}
+          </button>
+          {!pending.unavailable && (
+            <button type="button" className="primary" onClick={accept}>
+              Sí, quiero más horas · {moneyFromCents(pending.totalCents)}
+            </button>
+          )}
         </div>
       </div>
     </div>,
