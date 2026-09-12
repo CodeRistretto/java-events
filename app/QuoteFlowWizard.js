@@ -66,6 +66,40 @@ function termsCheckbox() {
   );
 }
 
+function statusText(kind) {
+  return String(
+    document.querySelector(`main.app-shell .status.${kind}`)?.textContent || ""
+  ).trim();
+}
+
+function waitForResult(test, timeoutMs = 15000, intervalMs = 80) {
+  return new Promise((resolve, reject) => {
+    const started = Date.now();
+
+    const tick = () => {
+      try {
+        const result = test();
+        if (result) {
+          resolve(result);
+          return;
+        }
+      } catch (error) {
+        reject(error);
+        return;
+      }
+
+      if (Date.now() - started >= timeoutMs) {
+        reject(new Error("La operación tardó demasiado. Intenta nuevamente."));
+        return;
+      }
+
+      window.setTimeout(tick, intervalMs);
+    };
+
+    tick();
+  });
+}
+
 function validate(step) {
   if (step === 1) {
     const city = control("Ciudad del evento");
@@ -77,13 +111,22 @@ function validate(step) {
       return ["Selecciona la fecha del evento.", document.querySelector(".java-calendar-card")];
     }
     if (selectedButton.classList.contains("java-date-unavailable")) {
-      return ["Esa fecha ya no está disponible. Selecciona otra fecha.", document.querySelector(".java-calendar-card")];
+      return [
+        "Esa fecha ya no está disponible. Selecciona otra fecha.",
+        document.querySelector(".java-calendar-card"),
+      ];
     }
     if (document.body.dataset.javaStartChosen !== "1") {
-      return ["Selecciona primero la hora de inicio.", document.querySelector(".java-time-tabs button:first-child")];
+      return [
+        "Selecciona primero la hora de inicio.",
+        document.querySelector(".java-time-tabs button:first-child"),
+      ];
     }
     if (document.body.dataset.javaEndChosen !== "1") {
-      return ["Ahora selecciona la hora de término.", document.querySelector(".java-time-tabs button:nth-child(2)")];
+      return [
+        "Ahora selecciona la hora de término.",
+        document.querySelector(".java-time-tabs button:nth-child(2)"),
+      ];
     }
   }
 
@@ -98,7 +141,10 @@ function validate(step) {
       if (!hasValue(node)) return [message, node];
     }
     if (!pinReady()) {
-      return ["Coloca el pin en la ubicación exacta del evento.", document.querySelector(".java-location-picker")];
+      return [
+        "Coloca el pin en la ubicación exacta del evento.",
+        document.querySelector(".java-location-picker"),
+      ];
     }
   }
 
@@ -118,17 +164,17 @@ function validate(step) {
     if (!hasValue(setup)) return ["Selecciona el horario de montaje.", setup];
 
     const measures = document.querySelectorAll(".java-event-measurements input[type='number']");
-    if (!hasValue(measures?.[0])) return ["Indica el punto más angosto del recorrido.", measures?.[0]];
-    if (!hasValue(measures?.[1])) return ["Indica la distancia a la conexión eléctrica.", measures?.[1]];
+    if (!hasValue(measures?.[0])) {
+      return ["Indica el punto más angosto del recorrido.", measures?.[0]];
+    }
+    if (!hasValue(measures?.[1])) {
+      return ["Indica la distancia a la conexión eléctrica.", measures?.[1]];
+    }
 
     const accepted = document.querySelector(".java-event-access-check input[type='checkbox']");
     if (!accepted?.checked) {
       return ["Confirma que el lugar cumple con el espacio y acceso mínimos.", accepted];
     }
-  }
-
-  if (step === 4 && !quoteReady()) {
-    return ["Calcula el precio del evento antes de continuar.", button(/ver precio de mi evento|calcular precio del evento/i)];
   }
 
   if (step === 5) {
@@ -141,7 +187,9 @@ function validate(step) {
       if (!hasValue(node)) return [message, node];
     }
     const terms = termsCheckbox();
-    if (terms && !terms.checked) return ["Acepta las condiciones del servicio para continuar.", terms];
+    if (terms && !terms.checked) {
+      return ["Acepta las condiciones del servicio para continuar.", terms];
+    }
   }
 
   return null;
@@ -194,7 +242,9 @@ function targetForError(text) {
   if (/montaje/i.test(text)) return document.querySelector("[data-java-setup-select]");
   if (/condiciones/i.test(text)) return termsCheckbox();
   if (/fecha|disponib/i.test(text)) return document.querySelector(".java-calendar-card");
-  if (/pin|ubicación exacta|ubicacion exacta/i.test(text)) return document.querySelector(".java-location-picker");
+  if (/pin|ubicación exacta|ubicacion exacta/i.test(text)) {
+    return document.querySelector(".java-location-picker");
+  }
   return null;
 }
 
@@ -207,6 +257,8 @@ export default function QuoteFlowWizard() {
   const [footerMount, setFooterMount] = useState(null);
   const [message, setMessage] = useState("");
   const [checkingAvailability, setCheckingAvailability] = useState(false);
+  const [calculatingQuote, setCalculatingQuote] = useState(false);
+  const [quoteCalculated, setQuoteCalculated] = useState(false);
   const timerRef = useRef(null);
   const lastErrorRef = useRef("");
 
@@ -214,12 +266,18 @@ export default function QuoteFlowWizard() {
     setHydrated(true);
   }, []);
 
+  function showMessage(text, duration = 4200) {
+    setMessage(text);
+    clearTimeout(timerRef.current);
+    if (duration > 0) {
+      timerRef.current = window.setTimeout(() => setMessage(""), duration);
+    }
+  }
+
   function alertUser(result) {
     if (!result) return false;
     const [text, target] = result;
-    setMessage(text);
-    clearTimeout(timerRef.current);
-    timerRef.current = window.setTimeout(() => setMessage(""), 4200);
+    showMessage(text);
     focusNode(target);
     return true;
   }
@@ -229,51 +287,104 @@ export default function QuoteFlowWizard() {
     const eventDate = selectedEventDate();
 
     if (!city?.value || !eventDate) {
-      alertUser(["Selecciona ciudad y fecha antes de continuar.", document.querySelector(".java-calendar-card")]);
+      alertUser([
+        "Selecciona ciudad y fecha antes de continuar.",
+        document.querySelector(".java-calendar-card"),
+      ]);
+      return;
+    }
+
+    const nativeButton = button(/verificar disponibilidad|revisando fecha/i);
+    if (!nativeButton) {
+      showMessage("No encontramos el validador de disponibilidad. Recarga la página e intenta de nuevo.");
       return;
     }
 
     setCheckingAvailability(true);
-    setMessage("Confirmando disponibilidad en tiempo real…");
+    showMessage("Confirmando disponibilidad en tiempo real…", 0);
     lastErrorRef.current = "";
 
     try {
-      const response = await fetch("/api/availability", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serviceAreaId: city.value, eventDate }),
+      nativeButton.click();
+
+      const result = await waitForResult(() => {
+        const errorText = statusText("error");
+        if (errorText) return { ok: false, text: errorText };
+
+        const successText = statusText("success");
+        if (successText) return { ok: true, text: successText };
+
+        return null;
       });
-      const data = await response.json();
 
-      if (!response.ok || !data?.success) {
-        throw new Error(data?.error || "No fue posible verificar la disponibilidad.");
-      }
-
-      if (!data.available) {
-        window.dispatchEvent(
-          new CustomEvent("java:calendar-mark-unavailable", {
-            detail: { date: eventDate, state: data.dateState || "SOLD_OUT" },
-          })
-        );
-        setMessage(data.message || "Esa fecha no está disponible. Selecciona otra fecha.");
-        focusNode(document.querySelector(".java-calendar-card"));
-        return;
+      if (!result.ok) {
+        if (/no está disponible|no esta disponible|ocupad/i.test(result.text)) {
+          window.dispatchEvent(
+            new CustomEvent("java:calendar-mark-unavailable", {
+              detail: { date: eventDate, state: "SOLD_OUT" },
+            })
+          );
+        }
+        throw new Error(result.text);
       }
 
       document.body.dataset.javaAvailabilityDate = eventDate;
-      window.dispatchEvent(
-        new CustomEvent("java:toast", {
-          detail: { text: data.message || "Java Coffee Cart disponible para esta fecha.", tone: "success" },
-        })
-      );
       setMessage("");
       setStep(2);
     } catch (error) {
       const text = error?.message || "No fue posible verificar la disponibilidad.";
-      setMessage(text);
+      showMessage(text);
       focusNode(targetForError(text) || document.querySelector(".java-calendar-card"));
     } finally {
       setCheckingAvailability(false);
+    }
+  }
+
+  async function calculateQuoteAndStay() {
+    const nativeButton = button(/ver precio de mi evento|calcular precio del evento/i);
+    if (!nativeButton) {
+      showMessage("No encontramos el cálculo de cotización. Recarga la página e intenta de nuevo.");
+      return;
+    }
+
+    setCalculatingQuote(true);
+    showMessage("Calculando tu cotización…", 0);
+    lastErrorRef.current = "";
+
+    try {
+      nativeButton.click();
+
+      await waitForResult(() => {
+        if (quoteReady()) return { ok: true };
+        const errorText = statusText("error");
+        if (errorText) return { ok: false, text: errorText };
+        return null;
+      });
+
+      if (!quoteReady()) {
+        const errorText = statusText("error");
+        throw new Error(errorText || "No fue posible calcular la cotización.");
+      }
+
+      setQuoteCalculated(true);
+      setMessage("");
+      window.dispatchEvent(
+        new CustomEvent("java:toast", {
+          detail: {
+            text: "Cotización lista. Revisa el total, el anticipo de hoy y el saldo pendiente.",
+            tone: "success",
+          },
+        })
+      );
+
+      const quote = document.querySelector("main.app-shell .quote-money")?.closest(".quote-card");
+      quote?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    } catch (error) {
+      const text = error?.message || "No fue posible calcular la cotización.";
+      showMessage(text);
+      focusNode(targetForError(text) || nativeButton);
+    } finally {
+      setCalculatingQuote(false);
     }
   }
 
@@ -283,6 +394,11 @@ export default function QuoteFlowWizard() {
 
     if (step === 1) {
       verifyAvailabilityAndContinue();
+      return;
+    }
+
+    if (step === 4 && !quoteReady()) {
+      calculateQuoteAndStay();
       return;
     }
 
@@ -314,6 +430,9 @@ export default function QuoteFlowWizard() {
         ? Array.from(city.options || []).find((option) => option.value === "OTHER")
         : null;
       other?.remove();
+
+      const quoteButton = button(/ver precio de mi evento|calcular precio del evento/i);
+      quoteButton?.closest(".action-row")?.classList.add("java-legacy-quote-action");
 
       let progressMount = panel.querySelector(":scope > .java-quote-wizard-progress-mount");
       if (!progressMount) {
@@ -379,6 +498,7 @@ export default function QuoteFlowWizard() {
     if (open) {
       applyStepVisibility(formSection, step);
       panel.scrollTo({ top: 0, behavior: "auto" });
+      if (step === 4) setQuoteCalculated(quoteReady());
     }
 
     const frame = requestAnimationFrame(() => {
@@ -392,12 +512,39 @@ export default function QuoteFlowWizard() {
   useEffect(() => {
     if (pathname !== "/") return;
 
+    function handleCardClick(event) {
+      const card = event.target.closest?.(".java-quote-wizard-panel .check-card");
+      if (!card) return;
+      if (event.target.closest?.("input, select, textarea, button, a")) return;
+
+      const checkbox = card.querySelector("input[type='checkbox']");
+      if (!checkbox || checkbox.disabled) return;
+
+      checkbox.click();
+      if (step === 4) setQuoteCalculated(false);
+    }
+
+    function handleFormChange(event) {
+      if (step !== 4) return;
+      const card = event.target.closest?.(".check-card");
+      if (card) setQuoteCalculated(false);
+    }
+
+    document.addEventListener("click", handleCardClick);
+    document.addEventListener("change", handleFormChange);
+    return () => {
+      document.removeEventListener("click", handleCardClick);
+      document.removeEventListener("change", handleFormChange);
+    };
+  }, [pathname, step]);
+
+  useEffect(() => {
+    if (pathname !== "/") return;
+
     function onValidation(event) {
       const text = event.detail?.message;
       if (!text) return;
-      setMessage(text);
-      clearTimeout(timerRef.current);
-      timerRef.current = window.setTimeout(() => setMessage(""), 4200);
+      showMessage(text);
       focusNode(targetForError(text));
     }
 
@@ -406,7 +553,7 @@ export default function QuoteFlowWizard() {
       const text = String(error?.textContent || "").trim();
       if (!text || text === lastErrorRef.current) return;
       lastErrorRef.current = text;
-      setMessage(text);
+      showMessage(text);
       focusNode(targetForError(text));
     }, 900);
 
@@ -421,6 +568,13 @@ export default function QuoteFlowWizard() {
 
   const current = STEPS[step - 1];
   const progress = ((step - 1) / (STEPS.length - 1)) * 100;
+  const primaryLabel = checkingAvailability
+    ? "Confirmando fecha…"
+    : calculatingQuote
+    ? "Calculando cotización…"
+    : step === 4 && !quoteCalculated
+    ? "Ver mi cotización →"
+    : "Continuar →";
 
   return (
     <>
@@ -446,7 +600,9 @@ export default function QuoteFlowWizard() {
                 <button
                   type="button"
                   key={item.id}
-                  className={`${item.id === step ? "active" : ""} ${item.id < step ? "done" : ""}`}
+                  className={`${item.id === step ? "active" : ""} ${
+                    item.id < step ? "done" : ""
+                  }`}
                   onClick={() => item.id < step && setStep(item.id)}
                 >
                   <span>{item.id}</span>
@@ -466,7 +622,7 @@ export default function QuoteFlowWizard() {
             <button
               type="button"
               className="secondary"
-              disabled={step === 1 || checkingAvailability}
+              disabled={step === 1 || checkingAvailability || calculatingQuote}
               onClick={() => setStep((value) => Math.max(1, value - 1))}
             >
               ← Atrás
@@ -477,6 +633,8 @@ export default function QuoteFlowWizard() {
               <span>
                 {step === 1
                   ? "Continuar confirma la disponibilidad de la fecha en tiempo real."
+                  : step === 4 && !quoteCalculated
+                  ? "Continuar calcula tu cotización; después podrás revisar el total antes de reservar."
                   : step === 5
                   ? "Revisa tus datos, acepta las condiciones y aparta la fecha con el anticipo."
                   : "Puedes volver a cualquier paso anterior antes de pagar."}
@@ -487,10 +645,10 @@ export default function QuoteFlowWizard() {
               <button
                 type="button"
                 className="primary"
-                disabled={checkingAvailability}
+                disabled={checkingAvailability || calculatingQuote}
                 onClick={handleContinue}
               >
-                {checkingAvailability ? "Confirmando fecha…" : "Continuar →"}
+                {primaryLabel}
               </button>
             )}
           </div>,
