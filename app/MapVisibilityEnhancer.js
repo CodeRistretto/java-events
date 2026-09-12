@@ -10,61 +10,77 @@ export default function MapVisibilityEnhancer() {
     if (pathname !== "/") return;
 
     let resizeObserver = null;
-    let mutationObserver = null;
+    let mountObserver = null;
+    let observedMap = null;
+    let frame = null;
     let lastWidth = 0;
     let lastHeight = 0;
 
     const refreshLeaflet = () => {
-      const map = document.querySelector(".java-location-map.leaflet-container");
-      if (!map) return;
+      if (frame) cancelAnimationFrame(frame);
 
-      const rect = map.getBoundingClientRect();
-      if (rect.width < 40 || rect.height < 40) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
 
-      const changed =
-        Math.abs(rect.width - lastWidth) > 2 || Math.abs(rect.height - lastHeight) > 2;
+        const map = document.querySelector(".java-location-map.leaflet-container");
+        if (!map) return;
 
-      lastWidth = rect.width;
-      lastHeight = rect.height;
+        const rect = map.getBoundingClientRect();
+        if (rect.width < 40 || rect.height < 40) return;
 
-      if (!changed && map.dataset.javaMapSized === "1") return;
-      map.dataset.javaMapSized = "1";
+        const changed =
+          Math.abs(rect.width - lastWidth) > 2 || Math.abs(rect.height - lastHeight) > 2;
 
-      requestAnimationFrame(() => {
+        if (!changed && map.dataset.javaMapSized === "1") return;
+
+        lastWidth = rect.width;
+        lastHeight = rect.height;
+        map.dataset.javaMapSized = "1";
+
+        // Leaflet listens to the native resize event and recalculates its viewport.
+        // Emit it only when the container actually changes size. Observing Leaflet's
+        // own style/class mutations created a feedback loop and could freeze the page.
         window.dispatchEvent(new Event("resize"));
-        setTimeout(() => window.dispatchEvent(new Event("resize")), 120);
-        setTimeout(() => window.dispatchEvent(new Event("resize")), 420);
       });
     };
 
     const attachResizeObserver = () => {
       const map = document.querySelector(".java-location-map");
-      if (!map || resizeObserver) return;
+      if (!map || map === observedMap) return;
+
+      resizeObserver?.disconnect();
+      observedMap = map;
+      lastWidth = 0;
+      lastHeight = 0;
 
       resizeObserver = new ResizeObserver(() => refreshLeaflet());
       resizeObserver.observe(map);
       refreshLeaflet();
     };
 
-    const timer = setTimeout(attachResizeObserver, 100);
-    mutationObserver = new MutationObserver(() => {
-      attachResizeObserver();
-      refreshLeaflet();
-    });
-    mutationObserver.observe(document.body, {
+    const initial = window.setTimeout(attachResizeObserver, 80);
+
+    // Only watch for the map node being mounted. Do not watch style/class changes:
+    // Leaflet changes those while resizing and that can recursively trigger itself.
+    mountObserver = new MutationObserver(() => attachResizeObserver());
+    mountObserver.observe(document.body, {
       childList: true,
       subtree: true,
-      attributes: true,
-      attributeFilter: ["style", "class"],
     });
 
-    window.addEventListener("java:wizard-step", refreshLeaflet);
+    const onWizardStep = () => {
+      attachResizeObserver();
+      window.setTimeout(refreshLeaflet, 40);
+    };
+
+    window.addEventListener("java:wizard-step", onWizardStep);
 
     return () => {
-      clearTimeout(timer);
+      clearTimeout(initial);
+      if (frame) cancelAnimationFrame(frame);
       resizeObserver?.disconnect();
-      mutationObserver?.disconnect();
-      window.removeEventListener("java:wizard-step", refreshLeaflet);
+      mountObserver?.disconnect();
+      window.removeEventListener("java:wizard-step", onWizardStep);
     };
   }, [pathname]);
 
