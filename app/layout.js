@@ -7,6 +7,7 @@ import "./event-duration.css";
 import "./event-photos.css";
 import "./lead-capture.css";
 import "./event-requirements.css";
+import "./floating-event-cart.css";
 import SafeClientEnhancers from "./SafeClientEnhancers";
 
 const syne = Syne({
