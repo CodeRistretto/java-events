@@ -11,6 +11,10 @@ import {
 } from "@/lib/eventInventory";
 import { validateServiceAreaAddress } from "@/lib/serviceAreaValidation";
 import { normalizeMexicoPhone } from "@/lib/phone";
+import {
+  assertMinimumLeadTime,
+  balancePaymentDeadline,
+} from "@/lib/eventBookingRules";
 
 function validEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
@@ -55,6 +59,8 @@ export async function POST(request) {
     if (!body.serviceAreaId) throw new Error("Selecciona una ciudad.");
 
     const durationHours = durationFromTimes(body.startTime, body.endTime);
+    const settings = await getEventSettings();
+    assertMinimumLeadTime(body.eventDate, settings.minimum_lead_days ?? 7);
 
     if (
       !Number.isFinite(latitude) ||
@@ -98,7 +104,6 @@ export async function POST(request) {
       durationHours,
     });
 
-    const settings = await getEventSettings();
     await releaseExpiredInventory();
 
     const candidates = await getCandidateCarts(body.serviceAreaId, body.eventDate);
@@ -112,6 +117,10 @@ export async function POST(request) {
     const holdExpiresAt = new Date(
       Date.now() + Number(settings.hold_minutes) * 60 * 1000
     ).toISOString();
+    const paymentDeadlineAt = balancePaymentDeadline(
+      body.eventDate,
+      settings.balance_due_days_before ?? 3
+    );
 
     for (const cart of candidates) {
       const eventOrderNumber = createOrderNumber();
@@ -149,6 +158,7 @@ export async function POST(request) {
           balance_cents: quote.balanceCents,
           status: "HOLD",
           hold_expires_at: holdExpiresAt,
+          payment_deadline_at: paymentDeadlineAt,
           coffee_cart_id: cart.id,
           notes: body.notes || null,
           event_order_number: eventOrderNumber,
@@ -166,7 +176,17 @@ export async function POST(request) {
           tax_usage: body.invoiceRequired ? body.taxUsage || null : null,
           terms_accepted_at: new Date().toISOString(),
           selected_add_ons: selectedAddOnsSnapshot,
-          pricing_snapshot: quote,
+          pricing_snapshot: {
+            ...quote,
+            bookingRules: {
+              minimumLeadDays: Number(settings.minimum_lead_days ?? 7),
+              balanceDueDaysBefore: Number(settings.balance_due_days_before ?? 3),
+              cancellationRefundBps: Number(settings.cancellation_refund_bps ?? 5000),
+              cupSizeOz: Number(settings.cup_size_oz ?? 12),
+              includedHotDrinks: settings.included_hot_drinks || [],
+              includedColdDrinks: settings.included_cold_drinks || [],
+            },
+          },
           payment_method: body.paymentMethod || null,
         })
         .select("*")
@@ -220,6 +240,7 @@ export async function POST(request) {
         bookingId: booking.id,
         eventOrderNumber,
         holdExpiresAt,
+        paymentDeadlineAt,
         hold: {
           bookingId: booking.id,
           expiresAt: holdExpiresAt,
@@ -231,6 +252,11 @@ export async function POST(request) {
           hours: quote.durationHours,
           includedHours: quote.includedHours,
           additionalHours: quote.additionalHours,
+        },
+        bookingRules: {
+          minimumLeadDays: Number(settings.minimum_lead_days ?? 7),
+          balanceDueDaysBefore: Number(settings.balance_due_days_before ?? 3),
+          cancellationRefundPercent: Number(settings.cancellation_refund_bps ?? 5000) / 100,
         },
         quote: {
           total: centsToMoney(quote.totalCents),
