@@ -96,30 +96,7 @@ function addOnPriceLabel(addOn) {
 }
 
 function addOnDescription(addOn) {
-  if (addOn.description?.trim()) return addOn.description;
-
-  const descriptions = {
-    COLD_BEVERAGES:
-      "Agrega servicio de bebidas frías para todos los invitados contratados.",
-    FRAPPES: "Agrega frappés al servicio para todos los invitados contratados.",
-    MATCHA_CHAI: "Agrega opciones de matcha y chai al servicio del evento.",
-    DECAF: "Agrega opción de café descafeinado al servicio.",
-    PLANT_MILK: "Agrega opciones de leche vegetal para el servicio.",
-    PASTRY: "Agrega panadería para los invitados del evento.",
-    PREMIUM_PASTRY: "Agrega una selección de panadería premium.",
-    DESSERT_TABLE: "Agrega una mesa de postres como servicio adicional del evento.",
-    BOTTLED_WATER: "Agrega botellas de agua. Indica la cantidad que necesitas.",
-    PERSONALIZED_CUPS: "Agrega vasos personalizados para los invitados contratados.",
-    PERSONALIZED_MENU: "Agrega un menú personalizado para tu evento.",
-    SPECIAL_GLASSWARE: "Agrega cristalería especial al servicio.",
-    ADDITIONAL_CART:
-      "Solicita un Coffee Cart adicional. La disponibilidad será validada por Java.",
-    ADDITIONAL_BARISTA: "Agrega personal adicional al servicio del evento.",
-    ADDITIONAL_HOUR: "Extiende el servicio por una o más horas adicionales.",
-    TRANSPORTATION: "Cargo de transporte cuando corresponda a la zona del evento.",
-  };
-
-  return descriptions[addOn.code] || "Servicio opcional que puedes agregar a tu evento.";
+  return addOn.description?.trim() || "";
 }
 
 function groupLabel(group) {
@@ -1055,9 +1032,11 @@ export default function Home() {
                               <div className="check-text" style={{ marginTop: 6, fontWeight: 650 }}>
                                 {addOnPriceLabel(addOn)}
                               </div>
-                              <div className="check-text" style={{ marginTop: 6 }}>
-                                {addOnDescription(addOn)}
-                              </div>
+                              {addOnDescription(addOn) && (
+                                <div className="check-text" style={{ marginTop: 6 }}>
+                                  {addOnDescription(addOn)}
+                                </div>
+                              )}
 
                               {selected &&
                                 ["PER_HOUR", "PER_UNIT"].includes(addOn.pricing_type) && (
