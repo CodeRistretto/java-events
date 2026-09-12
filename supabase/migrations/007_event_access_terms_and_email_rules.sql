@@ -114,7 +114,7 @@ values
 ('BALANCE_D5','Saldo · 5 días antes','BALANCE_REMINDER','SHOPIFY_INVOICE','EVENT_DATE_OFFSET',5,null,1,true,true,false,true,40),
 ('BALANCE_D4','Saldo · 4 días antes','BALANCE_REMINDER','SHOPIFY_INVOICE','EVENT_DATE_OFFSET',4,null,1,true,true,false,true,50),
 ('BALANCE_D3','Saldo · 3 días antes','BALANCE_REMINDER','SHOPIFY_INVOICE','EVENT_DATE_OFFSET',3,null,1,true,true,false,true,60),
-('UNPAID_MONTHLY','Seguimiento mensual sin anticipo','MONTHLY_REACTIVATION','APP_EMAIL','LEAD_AGE_INTERVAL',null,30,12,false,false,true,true,100)
+('UNPAID_MONTHLY','Seguimiento mensual sin anticipo','MONTHLY_REACTIVATION','APP_EMAIL','BOOKING_AGE_INTERVAL',null,30,12,false,false,true,true,100)
 on conflict (code) do nothing;
 
 create index if not exists event_email_rules_active_sort_idx
