@@ -188,6 +188,28 @@ export default function EventPhotoExperience() {
   useEffect(() => {
     if (pathname !== "/") return;
 
+    function syncVisibleServiceCopy() {
+      const cards = Array.from(document.querySelectorAll("main.app-shell .quote-card"));
+      const baseCard = cards.find((card) =>
+        /¿qué incluye el precio base\?|que incluye el precio base/i.test(card.textContent || "")
+      );
+      const paragraph = baseCard?.querySelector("p.caption");
+      if (!paragraph) return;
+
+      const next = `Coffee Cart, máquina de espresso, molino, montaje, personal Java y bebidas calientes de ${service.cupSizeOz} oz: ${service.hotDrinks.join(
+        ", "
+      )}.`;
+      if (paragraph.textContent !== next) paragraph.textContent = next;
+    }
+
+    syncVisibleServiceCopy();
+    const interval = window.setInterval(syncVisibleServiceCopy, 800);
+    return () => window.clearInterval(interval);
+  }, [pathname, service.cupSizeOz, service.hotDrinks]);
+
+  useEffect(() => {
+    if (pathname !== "/") return;
+
     function syncQuoteMount() {
       const quoteCard = Array.from(document.querySelectorAll("main.app-shell .quote-card")).find(
         (card) => card.querySelector(".quote-money")
@@ -223,7 +245,9 @@ export default function EventPhotoExperience() {
   if (pathname !== "/") return null;
 
   const balancePercent = Math.max(0, 100 - service.depositPercent);
-  const citiesText = service.cities.length ? service.cities.join(", ") : "zonas con cobertura activa";
+  const citiesText = service.cities.length
+    ? service.cities.join(", ")
+    : "zonas con cobertura activa";
 
   return (
     <>
@@ -288,7 +312,9 @@ export default function EventPhotoExperience() {
               <div>
                 <span>03</span>
                 <strong>No pagas todo hoy</strong>
-                <p>El anticipo aparta la fecha y el saldo se liquida {service.balanceDueDaysBefore} días antes.</p>
+                <p>
+                  El anticipo aparta la fecha y el saldo se liquida {service.balanceDueDaysBefore} días antes.
+                </p>
               </div>
             </section>
 
