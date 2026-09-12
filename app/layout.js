@@ -12,6 +12,7 @@ import EventDurationGuard from "./EventDurationGuard";
 import EventPhotoExperience from "./EventPhotoExperience";
 import LeadCaptureEnhancer from "./LeadCaptureEnhancer";
 import EventFormHardening from "./EventFormHardening";
+import ConfirmationPaymentCTA from "./ConfirmationPaymentCTA";
 
 const syne = Syne({
   subsets: ["latin"],
@@ -35,6 +36,7 @@ export default function RootLayout({ children }) {
         <EventPhotoExperience />
         <LeadCaptureEnhancer />
         <EventFormHardening />
+        <ConfirmationPaymentCTA />
       </body>
     </html>
   );
