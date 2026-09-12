@@ -139,17 +139,16 @@ export default function LeadCaptureEnhancer() {
       }
 
       const termsCard = Array.from(document.querySelectorAll("main.app-shell .check-card")).find(
-        (card) => String(card.textContent || "").includes("Entiendo qué estoy contratando")
+        (card) => String(card.textContent || "").includes("Entiendo qué estoy contratando") || String(card.textContent || "").includes("Acepto las condiciones operativas y de reserva")
       );
 
       if (termsCard) {
         const title = termsCard.querySelector(".check-title");
         const text = termsCard.querySelector(".check-text");
-        if (title) title.textContent = "Acepto las condiciones operativas y de reserva";
-        if (text) {
-          text.textContent =
-            "Confirmo que revisé el precio, el acceso del lugar y las condiciones mostradas arriba. Entiendo que la fecha sólo queda confirmada con el anticipo.";
-        }
+        const nextTitle = "Acepto las condiciones operativas y de reserva";
+        const nextText = "Confirmo que revisé el precio, el acceso del lugar y las condiciones mostradas arriba. Entiendo que la fecha sólo queda confirmada con el anticipo.";
+        if (title && title.textContent !== nextTitle) title.textContent = nextTitle;
+        if (text && text.textContent !== nextText) text.textContent = nextText;
       }
 
       if (termsCard && !document.querySelector(".java-visible-terms-mount")) {
