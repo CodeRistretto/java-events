@@ -65,9 +65,6 @@ export default function EventFormHardening() {
       const waterDistance = fieldByLabel("Distancia aproximada al punto de agua (metros)");
       const electricity = fieldByLabel("Electricidad disponible") || fieldByLabel("Conexión eléctrica disponible");
 
-      // These legacy fields still exist in page.js and its pre-submit validation.
-      // Java now brings its own water, so keep them hidden and set harmless values
-      // in React state until the old database columns can eventually be removed.
       if (water) {
         water.style.display = "none";
         setControlledValue(water.querySelector("select"), "yes");
@@ -79,24 +76,25 @@ export default function EventFormHardening() {
 
       const select = indoor?.querySelector("select");
       if (select) {
-        Array.from(select.options).forEach((option) => {
-          if (option.value === "BOTH") option.remove();
-        });
+        const bothOption = Array.from(select.options).find((option) => option.value === "BOTH");
+        if (bothOption) bothOption.remove();
         if (select.value === "BOTH") setControlledValue(select, "");
       }
 
       if (electricity) {
         const label = electricity.querySelector("label");
         const input = electricity.querySelector("input");
-        if (label) label.textContent = "Conexión eléctrica disponible";
-        if (input) input.placeholder = "Ej. contacto 127 V cercano al Coffee Cart";
+        const nextLabel = "Conexión eléctrica disponible";
+        const nextPlaceholder = "Ej. contacto 127 V cercano al Coffee Cart";
+        if (label && label.textContent !== nextLabel) label.textContent = nextLabel;
+        if (input && input.placeholder !== nextPlaceholder) input.placeholder = nextPlaceholder;
       }
 
       const grid = indoor?.parentElement;
       if (!grid) return;
       const existing = document.querySelector(".java-event-requirements-mount");
       if (existing) {
-        setMount(existing);
+        setMount((current) => current || existing);
         return;
       }
       node = document.createElement("div");
