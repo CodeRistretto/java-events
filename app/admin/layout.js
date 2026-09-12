@@ -4,37 +4,39 @@ const linkStyle = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  minHeight: 42,
-  padding: "10px 14px",
-  borderRadius: 12,
-  border: "1px solid #343434",
-  background: "#171717",
-  color: "#ffffff",
+  minHeight: 40,
+  padding: "9px 14px",
+  borderRadius: 999,
+  border: "1px solid rgba(29,29,31,.12)",
+  background: "#ffffff",
+  color: "#1d1d1f",
   textDecoration: "none",
-  fontSize: 14,
-  fontWeight: 800,
+  fontSize: 13,
+  fontWeight: 650,
   whiteSpace: "nowrap",
+  boxShadow: "0 2px 8px rgba(0,0,0,.025)",
 };
 
 export default function AdminLayout({ children }) {
   return (
-    <div style={{ minHeight: "100vh", background: "#090909" }}>
+    <div style={{ minHeight: "100vh", background: "#f5f5f7" }}>
       <nav
         style={{
           position: "sticky",
           top: 0,
           zIndex: 100,
-          background: "rgba(9, 9, 9, 0.96)",
-          backdropFilter: "blur(12px)",
-          borderBottom: "1px solid #252525",
+          background: "rgba(255,255,255,.88)",
+          backdropFilter: "blur(18px) saturate(160%)",
+          WebkitBackdropFilter: "blur(18px) saturate(160%)",
+          borderBottom: "1px solid rgba(29,29,31,.08)",
         }}
       >
         <div
           style={{
             width: "100%",
-            maxWidth: 1400,
+            maxWidth: 1440,
             margin: "0 auto",
-            padding: "12px 20px",
+            padding: "11px 20px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -45,10 +47,10 @@ export default function AdminLayout({ children }) {
           <div>
             <div
               style={{
-                color: "#ff7541",
+                color: "#f05a22",
                 fontSize: 10,
-                fontWeight: 900,
-                letterSpacing: 1.6,
+                fontWeight: 700,
+                letterSpacing: 1.5,
               }}
             >
               JAVA TIMES CAFFÉ · EVENTS
@@ -56,10 +58,11 @@ export default function AdminLayout({ children }) {
 
             <div
               style={{
-                color: "#ffffff",
+                color: "#1d1d1f",
                 marginTop: 3,
                 fontSize: 16,
-                fontWeight: 900,
+                fontWeight: 650,
+                letterSpacing: "-.02em",
               }}
             >
               Admin Control Center
@@ -82,7 +85,8 @@ export default function AdminLayout({ children }) {
               href="/admin/events"
               style={{
                 ...linkStyle,
-                borderColor: "rgba(240,90,34,.55)",
+                borderColor: "rgba(240,90,34,.25)",
+                background: "#fff7f2",
               }}
             >
               Calendar & Events
@@ -92,7 +96,8 @@ export default function AdminLayout({ children }) {
               href="/admin/payments"
               style={{
                 ...linkStyle,
-                borderColor: "rgba(240,90,34,.55)",
+                borderColor: "rgba(240,90,34,.25)",
+                background: "#fff7f2",
               }}
             >
               Payments
