@@ -7,7 +7,6 @@ import "./event-duration.css";
 import "./event-photos.css";
 import "./lead-capture.css";
 import "./event-requirements.css";
-import "./floating-event-cart.css";
 import "./quote-wizard.css";
 import "./status-toast.css";
 import "./calendar-availability.css";
