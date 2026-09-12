@@ -8,6 +8,7 @@ export default function StatusToastEnhancer() {
   const pathname = usePathname();
   const [toast, setToast] = useState(null);
   const timerRef = useRef(null);
+  const frameRef = useRef(null);
 
   useEffect(() => {
     if (pathname !== "/") return;
@@ -16,7 +17,7 @@ export default function StatusToastEnhancer() {
       if (!text) return;
       clearTimeout(timerRef.current);
       setToast({ id: Date.now(), text, tone });
-      timerRef.current = setTimeout(() => setToast(null), 10000);
+      timerRef.current = window.setTimeout(() => setToast(null), 10000);
     }
 
     function customToast(event) {
@@ -24,6 +25,7 @@ export default function StatusToastEnhancer() {
     }
 
     function sync() {
+      frameRef.current = null;
       const allStatuses = Array.from(document.querySelectorAll("main.app-shell .status"));
 
       for (const node of allStatuses) {
@@ -31,35 +33,51 @@ export default function StatusToastEnhancer() {
         const text = String(node.textContent || "").trim();
 
         if (!isSuccess) {
-          node.classList.remove("java-status-toast-source-hidden");
-          delete node.dataset.javaToastHandled;
+          if (node.classList.contains("java-status-toast-source-hidden")) {
+            node.classList.remove("java-status-toast-source-hidden");
+          }
+          if (node.dataset.javaToastHandled) delete node.dataset.javaToastHandled;
           continue;
         }
 
-        node.classList.add("java-status-toast-source-hidden");
-        if (!text) continue;
-
-        if (node.dataset.javaToastHandled !== text) {
-          node.dataset.javaToastHandled = text;
-          show(text, "success");
+        if (!node.classList.contains("java-status-toast-source-hidden")) {
+          node.classList.add("java-status-toast-source-hidden");
         }
+
+        if (!text) continue;
+        if (node.dataset.javaToastHandled === text) continue;
+
+        node.dataset.javaToastHandled = text;
+        show(text, "success");
       }
     }
 
-    const timer = setTimeout(sync, 80);
-    const observer = new MutationObserver(sync);
+    function scheduleSync() {
+      if (frameRef.current !== null) return;
+      frameRef.current = window.requestAnimationFrame(sync);
+    }
+
+    const timer = window.setTimeout(scheduleSync, 80);
+    const observer = new MutationObserver(scheduleSync);
+
+    // Important: do not observe class/style attributes here. This enhancer changes
+    // the class of success messages itself; observing attributes can create a
+    // self-triggering MutationObserver loop that freezes the quote wizard.
     observer.observe(document.body, {
       childList: true,
       subtree: true,
       characterData: true,
-      attributes: true,
-      attributeFilter: ["class"],
     });
+
     window.addEventListener("java:toast", customToast);
 
     return () => {
-      clearTimeout(timer);
-      clearTimeout(timerRef.current);
+      window.clearTimeout(timer);
+      window.clearTimeout(timerRef.current);
+      if (frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+      }
       observer.disconnect();
       window.removeEventListener("java:toast", customToast);
       document
