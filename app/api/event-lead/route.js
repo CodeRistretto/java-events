@@ -28,6 +28,7 @@ export async function POST(request) {
       quote_total_cents: Number(body.quoteTotalCents || 0) || null,
       quote_deposit_cents: Number(body.quoteDepositCents || 0) || null,
       quote_balance_cents: Number(body.quoteBalanceCents || 0) || null,
+      marketing_consent: Boolean(body.marketingConsent),
       status: "QUOTED",
       source: "JAVA_EVENTS_QUOTE",
       metadata: {
