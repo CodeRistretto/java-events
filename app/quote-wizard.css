@@ -3,12 +3,17 @@ body:not(.java-quote-wizard-open) main.app-shell .page-grid {
 }
 
 .java-quote-wizard-backdrop {
+  display: none;
   position: fixed;
   inset: 0;
   z-index: 8000;
   background: rgba(18, 18, 20, 0.34);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+}
+
+body.java-quote-wizard-open .java-quote-wizard-backdrop {
+  display: block;
 }
 
 .java-quote-wizard-panel {
