@@ -13,6 +13,36 @@ function fail(error) {
   );
 }
 
+function numberField(value, label, { min = -Infinity, max = Infinity, blank = false } = {}) {
+  if (blank && (value === "" || value === null || value === undefined)) return null;
+
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < min || number > max) {
+    const error = new Error(`${label} no es válido.`);
+    error.status = 400;
+    throw error;
+  }
+  return number;
+}
+
+function normalizedPostalCodes(value) {
+  const codes = [...new Set(
+    String(value || "")
+      .split(",")
+      .map((postalCode) => postalCode.trim())
+      .filter(Boolean)
+  )];
+
+  const invalid = codes.find((postalCode) => !/^\d{5}$/.test(postalCode));
+  if (invalid) {
+    const error = new Error(`El código postal ${invalid} debe tener 5 dígitos.`);
+    error.status = 400;
+    throw error;
+  }
+
+  return codes;
+}
+
 async function postalCodeMap() {
   const { data, error } = await supabaseAdmin
     .from("service_area_postal_codes")
@@ -232,7 +262,201 @@ export async function POST(request) {
       return Response.json({ success: true, data: result.data });
     }
 
+    if (action === "CREATE_SERVICE_AREA") {
+      const city = String(payload.city || "").trim();
+      const state = String(payload.state || "").trim();
+
+      if (!city || !state) {
+        const error = new Error("Ciudad y estado son obligatorios.");
+        error.status = 400;
+        throw error;
+      }
+
+      const minimumGuests = numberField(payload.minimumGuests, "El mínimo de invitados", {
+        min: 1,
+        max: 10000,
+      });
+      const transportFee = numberField(payload.transportFee, "El cargo de transporte", {
+        min: 0,
+        max: 1000000,
+      });
+      const centerLat = numberField(payload.centerLat, "La latitud", {
+        min: -90,
+        max: 90,
+        blank: true,
+      });
+      const centerLng = numberField(payload.centerLng, "La longitud", {
+        min: -180,
+        max: 180,
+        blank: true,
+      });
+      const radiusKm = numberField(payload.radiusKm, "El radio", {
+        min: 0.1,
+        max: 1000,
+        blank: true,
+      });
+      const postalCodes = normalizedPostalCodes(payload.postalCodes);
+      const requestedCartIds = [...new Set(
+        (Array.isArray(payload.cartIds) ? payload.cartIds : [])
+          .map((value) => String(value || "").trim())
+          .filter(Boolean)
+      )];
+
+      if ((centerLat === null) !== (centerLng === null)) {
+        const error = new Error("Captura juntas la latitud y la longitud.");
+        error.status = 400;
+        throw error;
+      }
+
+      if (!requestedCartIds.length) {
+        const error = new Error("Selecciona al menos un Coffee Cart.");
+        error.status = 400;
+        throw error;
+      }
+
+      const duplicate = await supabaseAdmin
+        .from("service_areas")
+        .select("id")
+        .ilike("city", city)
+        .ilike("state", state)
+        .limit(1)
+        .maybeSingle();
+
+      if (duplicate.error) throw duplicate.error;
+      if (duplicate.data) {
+        const error = new Error(`${city}, ${state} ya existe como área de servicio.`);
+        error.status = 409;
+        throw error;
+      }
+
+      const carts = await supabaseAdmin
+        .from("coffee_carts")
+        .select("id,code,name")
+        .in("id", requestedCartIds)
+        .eq("active", true);
+
+      if (carts.error) throw carts.error;
+      if ((carts.data || []).length !== requestedCartIds.length) {
+        const error = new Error("Uno de los Coffee Carts seleccionados ya no está activo.");
+        error.status = 400;
+        throw error;
+      }
+
+      const created = await supabaseAdmin
+        .from("service_areas")
+        .insert({
+          city,
+          state,
+          active: false,
+          minimum_guests: Math.round(minimumGuests),
+          transport_fee_cents: Math.round(transportFee * 100),
+          center_lat: centerLat,
+          center_lng: centerLng,
+          radius_km: radiusKm,
+          notes: String(payload.notes || "").trim() || null,
+          activation_at: null,
+        })
+        .select("*")
+        .single();
+
+      if (created.error) throw created.error;
+
+      try {
+        if (postalCodes.length) {
+          const postalResult = await supabaseAdmin
+            .from("service_area_postal_codes")
+            .insert(
+              postalCodes.map((postalCode) => ({
+                service_area_id: created.data.id,
+                postal_code: postalCode,
+                active: true,
+              }))
+            );
+          if (postalResult.error) throw postalResult.error;
+        }
+
+        const coverage = await supabaseAdmin
+          .from("coffee_cart_service_areas")
+          .insert(
+            requestedCartIds.map((cartId) => ({
+              coffee_cart_id: cartId,
+              service_area_id: created.data.id,
+              active: true,
+            }))
+          );
+        if (coverage.error) throw coverage.error;
+
+        const activated = await supabaseAdmin
+          .from("service_areas")
+          .update({
+            active: Boolean(payload.active),
+            activation_at: payload.active ? new Date().toISOString() : null,
+          })
+          .eq("id", created.data.id)
+          .select("*")
+          .single();
+        if (activated.error) throw activated.error;
+
+        const newValue = {
+          ...activated.data,
+          postalCodes,
+          cartIds: requestedCartIds,
+        };
+
+        await logAdminAction({
+          adminId: admin.username,
+          action,
+          entityType: "service_areas",
+          entityId: created.data.id,
+          oldValue: null,
+          newValue,
+        });
+
+        return Response.json({ success: true, data: newValue });
+      } catch (error) {
+        await supabaseAdmin.from("service_areas").delete().eq("id", created.data.id);
+        throw error;
+      }
+    }
+
     if (action === "UPDATE_SERVICE_AREA") {
+      if (!payload.id) {
+        const error = new Error("Falta el identificador del área de servicio.");
+        error.status = 400;
+        throw error;
+      }
+
+      const minimumGuests = numberField(payload.minimumGuests, "El mínimo de invitados", {
+        min: 1,
+        max: 10000,
+      });
+      const transportFee = numberField(payload.transportFee, "El cargo de transporte", {
+        min: 0,
+        max: 1000000,
+      });
+      const centerLat = numberField(payload.centerLat, "La latitud", {
+        min: -90,
+        max: 90,
+        blank: true,
+      });
+      const centerLng = numberField(payload.centerLng, "La longitud", {
+        min: -180,
+        max: 180,
+        blank: true,
+      });
+      const radiusKm = numberField(payload.radiusKm, "El radio", {
+        min: 0.1,
+        max: 1000,
+        blank: true,
+      });
+      const postalCodes = normalizedPostalCodes(payload.postalCodes);
+
+      if ((centerLat === null) !== (centerLng === null)) {
+        const error = new Error("Captura juntas la latitud y la longitud.");
+        error.status = 400;
+        throw error;
+      }
+
       const { data: oldValue } = await supabaseAdmin
         .from("service_areas")
         .select("*")
@@ -243,14 +467,12 @@ export async function POST(request) {
         .from("service_areas")
         .update({
           active: Boolean(payload.active),
-          minimum_guests: Number(payload.minimumGuests || 100),
-          transport_fee_cents: Math.round(
-            Number(payload.transportFee || 0) * 100
-          ),
-          center_lat: payload.centerLat === "" ? null : Number(payload.centerLat),
-          center_lng: payload.centerLng === "" ? null : Number(payload.centerLng),
-          radius_km: payload.radiusKm === "" ? null : Number(payload.radiusKm),
-          notes: payload.notes || null,
+          minimum_guests: Math.round(minimumGuests),
+          transport_fee_cents: Math.round(transportFee * 100),
+          center_lat: centerLat,
+          center_lng: centerLng,
+          radius_km: radiusKm,
+          notes: String(payload.notes || "").trim() || null,
         })
         .eq("id", payload.id)
         .select("*")
@@ -262,11 +484,6 @@ export async function POST(request) {
         .from("service_area_postal_codes")
         .delete()
         .eq("service_area_id", payload.id);
-
-      const postalCodes = String(payload.postalCodes || "")
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean);
 
       if (postalCodes.length) {
         const { error: postalError } = await supabaseAdmin
