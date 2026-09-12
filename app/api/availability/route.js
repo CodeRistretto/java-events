@@ -1,4 +1,6 @@
 import { getDateAvailability } from "@/lib/eventInventory";
+import { getEventSettings } from "@/lib/eventPricing";
+import { assertMinimumLeadTime } from "@/lib/eventBookingRules";
 
 export async function POST(request) {
   try {
@@ -17,6 +19,9 @@ export async function POST(request) {
         { status: 400 }
       );
     }
+
+    const settings = await getEventSettings();
+    assertMinimumLeadTime(body.eventDate, settings.minimum_lead_days ?? 7);
 
     const result = await getDateAvailability(
       body.serviceAreaId,
@@ -40,6 +45,7 @@ export async function POST(request) {
       availableCount: result.availableCount,
       dateState: result.state,
       message: messages[result.state],
+      minimumLeadDays: Number(settings.minimum_lead_days ?? 7),
     });
   } catch (error) {
     return Response.json(
@@ -47,7 +53,7 @@ export async function POST(request) {
         success: false,
         error: error.message || "No fue posible verificar la fecha.",
       },
-      { status: 500 }
+      { status: 400 }
     );
   }
 }
