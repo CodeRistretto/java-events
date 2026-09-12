@@ -7,6 +7,7 @@ import EventPhotoExperience from "./EventPhotoExperience";
 import LeadCaptureEnhancer from "./LeadCaptureEnhancer";
 import EventFormHardening from "./EventFormHardening";
 import ConfirmationPaymentCTA from "./ConfirmationPaymentCTA";
+import FloatingEventCart from "./FloatingEventCart";
 
 class EnhancerBoundary extends React.Component {
   constructor(props) {
@@ -45,6 +46,9 @@ export default function SafeClientEnhancers() {
       </EnhancerBoundary>
       <EnhancerBoundary name="EventFormHardening">
         <EventFormHardening />
+      </EnhancerBoundary>
+      <EnhancerBoundary name="FloatingEventCart">
+        <FloatingEventCart />
       </EnhancerBoundary>
       <EnhancerBoundary name="ConfirmationPaymentCTA">
         <ConfirmationPaymentCTA />
