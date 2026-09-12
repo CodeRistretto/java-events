@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 
 const CAPTURE_KEY = "java-events-lead-captured";
+const FOLLOWUP_KEY = "java-events-followup-consent";
 
 function money(value) {
   return new Intl.NumberFormat("es-MX", {
@@ -43,8 +44,13 @@ export default function LeadCaptureEnhancer() {
     minimumLeadDays: 7,
     balanceDueDaysBefore: 3,
     refundPercent: 50,
+    cartLengthCm: 320,
+    cartWidthCm: 150,
+    passageCm: 100,
+    rescheduleExtraHours: 2,
   });
   const [form, setForm] = useState({ customerName: "", email: "", phone: "" });
+  const [followupConsent, setFollowupConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const quoteRef = useRef(null);
@@ -54,8 +60,10 @@ export default function LeadCaptureEnhancer() {
     if (pathname !== "/") return;
     try {
       const already = sessionStorage.getItem(CAPTURE_KEY) === "1";
+      const followup = sessionStorage.getItem(FOLLOWUP_KEY) === "1";
       setCaptured(already);
       capturedRef.current = already;
+      setFollowupConsent(followup);
     } catch {}
 
     fetch("/api/event-config", { cache: "no-store" })
@@ -66,6 +74,10 @@ export default function LeadCaptureEnhancer() {
           minimumLeadDays: Number(data.settings?.minimum_lead_days ?? 7),
           balanceDueDaysBefore: Number(data.settings?.balance_due_days_before ?? 3),
           refundPercent: Number(data.settings?.cancellation_refund_bps ?? 5000) / 100,
+          cartLengthCm: Number(data.settings?.cart_operating_length_cm ?? 320),
+          cartWidthCm: Number(data.settings?.cart_operating_width_cm ?? 150),
+          passageCm: Number(data.settings?.minimum_passage_width_cm ?? 100),
+          rescheduleExtraHours: Number(data.settings?.reschedule_extra_hours ?? 2),
         });
       })
       .catch(() => {});
@@ -130,6 +142,16 @@ export default function LeadCaptureEnhancer() {
         (card) => String(card.textContent || "").includes("Entiendo qué estoy contratando")
       );
 
+      if (termsCard) {
+        const title = termsCard.querySelector(".check-title");
+        const text = termsCard.querySelector(".check-text");
+        if (title) title.textContent = "Acepto las condiciones operativas y de reserva";
+        if (text) {
+          text.textContent =
+            "Confirmo que revisé el precio, el acceso del lugar y las condiciones mostradas arriba. Entiendo que la fecha sólo queda confirmada con el anticipo.";
+        }
+      }
+
       if (termsCard && !document.querySelector(".java-visible-terms-mount")) {
         const node = document.createElement("div");
         node.className = "java-visible-terms-mount";
@@ -189,6 +211,7 @@ export default function LeadCaptureEnhancer() {
           quoteTotalCents: quote.totalCents,
           quoteDepositCents: quote.depositCents,
           quoteBalanceCents: quote.balanceCents,
+          marketingConsent: followupConsent,
         }),
       });
       const data = await response.json();
@@ -200,6 +223,7 @@ export default function LeadCaptureEnhancer() {
 
       try {
         sessionStorage.setItem(CAPTURE_KEY, "1");
+        sessionStorage.setItem(FOLLOWUP_KEY, followupConsent ? "1" : "0");
       } catch {}
       capturedRef.current = true;
       setCaptured(true);
@@ -223,15 +247,32 @@ export default function LeadCaptureEnhancer() {
       {termsMount &&
         createPortal(
           <div className="java-visible-terms">
-            <div className="java-visible-terms-kicker">CONDICIONES DE RESERVA</div>
+            <div className="java-visible-terms-kicker">CONDICIONES IMPORTANTES DEL SERVICIO</div>
             <div className="java-visible-terms-grid">
               <div><span>Anticipación mínima</span><strong>{settings.minimumLeadDays} días</strong></div>
               <div><span>Saldo completo</span><strong>{settings.balanceDueDaysBefore} días antes</strong></div>
-              <div><span>Si se cancela por falta de pago</span><strong>Se devuelve {settings.refundPercent}% del anticipo</strong></div>
+              <div><span>Acceso mínimo</span><strong>{settings.passageCm} cm libres</strong></div>
+              <div><span>Área del Coffee Cart</span><strong>{settings.cartLengthCm} × {settings.cartWidthCm} cm</strong></div>
             </div>
-            <p>
-              El porcentaje restante del anticipo se retiene por logística, preparación y por haber bloqueado la fecha para otros clientes.
-            </p>
+
+            <div className="java-terms-detail">
+              <h4>Antes de aceptar, toma en cuenta:</h4>
+              <ul>
+                <li><strong>Fecha y pago.</strong> La fecha queda confirmada únicamente después del pago del anticipo. El saldo debe liquidarse {settings.balanceDueDaysBefore} días antes del evento.</li>
+                <li><strong>Falta de liquidación.</strong> Si el saldo no se paga dentro del plazo y el evento se cancela por esa causa, se devuelve {settings.refundPercent}% del anticipo; el resto se retiene por logística, preparación y bloqueo de fecha.</li>
+                <li><strong>Lugar apto.</strong> El cliente/venue debe proporcionar un área firme y utilizable de al menos {settings.cartLengthCm} × {settings.cartWidthCm} cm, con un recorrido de mínimo {settings.passageCm} cm libres por puertas, pasillos y elevadores.</li>
+                <li><strong>Acceso y montaje.</strong> Restricciones no informadas, escaleras, puertas angostas, elevadores insuficientes, falta de acceso de descarga o impedimentos del venue pueden impedir o retrasar el servicio.</li>
+                <li><strong>Electricidad.</strong> El lugar debe contar con una conexión eléctrica adecuada y accesible. Fallas del inmueble o cortes ajenos a Java pueden limitar temporalmente la operación.</li>
+                <li><strong>Agua.</strong> Java lleva sus propios garrafones; no es obligatorio que el venue tenga toma de agua potable para el Coffee Cart.</li>
+                <li><strong>Alergias.</strong> El cliente debe informar alergias o restricciones alimentarias antes del evento. Trabajamos con ingredientes que pueden incluir leche, soya, nueces u otros alérgenos y no podemos garantizar un ambiente totalmente libre de contacto cruzado.</li>
+                <li><strong>Daños o pérdidas.</strong> Daños, pérdida o rotura de equipo, accesorios o propiedad de Java causados por invitados, personal del venue o terceros podrán generar cargos adicionales documentados.</li>
+                <li><strong>Exterior y clima.</strong> En eventos exteriores debe existir una zona razonablemente segura y protegida. Lluvia, viento extremo, calor, riesgo eléctrico u otras condiciones inseguras pueden obligar a pausar o suspender el servicio.</li>
+                <li><strong>Retrasos.</strong> Retrasos atribuibles al cliente o al venue no extienden automáticamente el horario contratado. El tiempo adicional se cobra conforme a la tarifa vigente.</li>
+                <li><strong>Reprogramación.</strong> Si el lugar resulta no apto o el evento requiere cambio de fecha, la reprogramación no es automática ni gratuita: depende de disponibilidad y, cuando proceda, tendrá un cargo equivalente a {settings.rescheduleExtraHours} horas adicionales, además de costos no recuperables que ya se hubieran generado.</li>
+                <li><strong>Cambios.</strong> Cambios de invitados, horario, ubicación, menú o condiciones operativas pueden modificar el precio y están sujetos a disponibilidad.</li>
+              </ul>
+              <p className="java-terms-legal-note">Estas condiciones operativas no eliminan derechos que por ley no puedan renunciarse ni cubren actos imputables a Java que legalmente no puedan excluirse.</p>
+            </div>
           </div>,
           termsMount
         )}
@@ -259,6 +300,13 @@ export default function LeadCaptureEnhancer() {
                 <label><span>WhatsApp</span><input required inputMode="tel" placeholder="10 dígitos" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></label>
                 <label className="full"><span>Correo electrónico</span><input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label>
               </div>
+
+              <label className="java-followup-consent">
+                <input type="checkbox" checked={followupConsent} onChange={(e) => setFollowupConsent(e.target.checked)} />
+                <span>
+                  Quiero recibir seguimiento de esta cotización si no termino mi reserva. Puede ser hasta un correo al mes durante máximo 12 meses y puedo darme de baja en cualquier momento.
+                </span>
+              </label>
 
               {error && <div className="java-lead-error">{error}</div>}
 
