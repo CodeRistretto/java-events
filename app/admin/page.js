@@ -581,7 +581,7 @@ function AreaRow({ area, onSave }) {
 
       <div className={styles.grid}>
         <Field
-          label="Transport fee MXN"
+          label="Transport fee MXN (IVA incluido)"
           value={form.transportFee}
           onChange={(value) =>
             setForm({ ...form, transportFee: value })
@@ -746,7 +746,7 @@ function NewServiceArea({ carts, onSave }) {
           onChange={(value) => setForm({ ...form, state: value })}
         />
         <Field
-          label="Transport fee MXN"
+          label="Transport fee MXN (IVA incluido)"
           type="number"
           min="0"
           step="0.01"
