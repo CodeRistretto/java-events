@@ -34,9 +34,11 @@ function isoDate(date) {
 }
 
 function citySelect() {
-  return Array.from(document.querySelectorAll("main.app-shell .field")).find((field) =>
-    /ciudad del evento/i.test(field.querySelector("label")?.textContent || "")
-  )?.querySelector("select") || null;
+  return (
+    Array.from(document.querySelectorAll("main.app-shell .field")).find((field) =>
+      /ciudad del evento/i.test(field.querySelector("label")?.textContent || "")
+    )?.querySelector("select") || null
+  );
 }
 
 function visibleMonth() {
@@ -79,7 +81,7 @@ function ensureLegend(card) {
   legend.innerHTML = `
     <span><i class="available"></i>Disponible</span>
     <span><i class="busy"></i>Ocupado</span>
-    <span><i class="restricted"></i>No reservable</span>
+    <span><i class="restricted"></i>Fuera de plazo</span>
   `;
   const weekdays = card.querySelector(".java-calendar-weekdays");
   weekdays?.insertAdjacentElement("beforebegin", legend);
@@ -95,7 +97,8 @@ function applyDates(dateStates) {
     const date = dates[index];
     if (!date) return;
     const value = isoDate(date);
-    button.dataset.javaDate = value;
+
+    if (button.dataset.javaDate !== value) button.dataset.javaDate = value;
 
     const state = dateStates.get(value);
     const unavailable = state && state.available === false;
@@ -105,10 +108,14 @@ function applyDates(dateStates) {
       button.dataset.javaAvailabilityState = state.state || "SOLD_OUT";
       button.classList.add("java-date-unavailable");
       button.disabled = true;
-      button.title = state.state === "TEMPORARILY_HELD"
-        ? "Fecha temporalmente apartada"
-        : "Fecha ocupada";
-    } else if (button.dataset.javaAvailabilityDisabled === "1") {
+      button.title =
+        state.state === "TEMPORARILY_HELD"
+          ? "Fecha temporalmente apartada"
+          : "Fecha ocupada";
+      return;
+    }
+
+    if (button.dataset.javaAvailabilityDisabled === "1") {
       delete button.dataset.javaAvailabilityDisabled;
       delete button.dataset.javaAvailabilityState;
       button.classList.remove("java-date-unavailable");
@@ -130,6 +137,7 @@ export default function CalendarAvailabilityEnhancer() {
     if (pathname !== "/") return;
 
     let stopped = false;
+    let refreshTimer = null;
 
     async function refresh(force = false) {
       if (stopped) return;
@@ -162,7 +170,9 @@ export default function CalendarAvailabilityEnhancer() {
         });
         const data = await response.json();
         if (stopped || requestId !== requestRef.current) return;
-        if (!response.ok || !data?.success) throw new Error(data?.error || "No fue posible cargar las fechas.");
+        if (!response.ok || !data?.success) {
+          throw new Error(data?.error || "No fue posible cargar las fechas.");
+        }
 
         statesRef.current = new Map((data.dates || []).map((item) => [item.date, item]));
         applyDates(statesRef.current);
@@ -185,6 +195,14 @@ export default function CalendarAvailabilityEnhancer() {
       }
     }
 
+    function scheduleRefresh(delay = 60, force = true) {
+      clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        if (force) signatureRef.current = "";
+        refresh(force);
+      }, delay);
+    }
+
     function markUnavailable(event) {
       const date = event.detail?.date;
       if (!date) return;
@@ -197,22 +215,37 @@ export default function CalendarAvailabilityEnhancer() {
       applyDates(statesRef.current);
     }
 
+    function handleClick(event) {
+      if (event.target.closest?.(".java-calendar-toolbar button")) {
+        scheduleRefresh(80, true);
+      }
+    }
+
+    function handleChange(event) {
+      if (event.target === citySelect()) {
+        scheduleRefresh(30, true);
+      }
+    }
+
     function refreshCalendar() {
-      signatureRef.current = "";
-      refresh(true);
+      scheduleRefresh(20, true);
     }
 
     const initial = window.setTimeout(() => refresh(true), 120);
-    const interval = window.setInterval(() => refresh(false), 450);
+    document.addEventListener("click", handleClick);
+    document.addEventListener("change", handleChange);
     window.addEventListener("java:calendar-mark-unavailable", markUnavailable);
     window.addEventListener("java:calendar-refresh", refreshCalendar);
 
     return () => {
       stopped = true;
       clearTimeout(initial);
-      clearInterval(interval);
+      clearTimeout(refreshTimer);
+      document.removeEventListener("click", handleClick);
+      document.removeEventListener("change", handleChange);
       window.removeEventListener("java:calendar-mark-unavailable", markUnavailable);
       window.removeEventListener("java:calendar-refresh", refreshCalendar);
+
       document.querySelectorAll(".java-date-unavailable").forEach((button) => {
         button.classList.remove("java-date-unavailable");
         delete button.dataset.javaAvailabilityDisabled;
